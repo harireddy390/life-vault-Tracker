@@ -1,0 +1,24 @@
+.health-page { max-width: 900px; margin: 0 auto; }
+
+.health-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); align-items: start; }
+
+.health-panel { padding: var(--space-5); text-align: center; }
+
+.hydration-ring-wrap { display: flex; justify-content: center; margin-bottom: var(--space-4); }
+.hydration-ring { width: 140px; height: 140px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: background 0.3s ease; }
+.hydration-ring-center { width: 108px; height: 108px; border-radius: 50%; background: var(--surface); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.hydration-pct { font-family: var(--font-display); font-size: 24px; font-weight: 700; color: #67e8f9; }
+.hydration-label { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+
+.water-drops-large { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin-bottom: var(--space-4); }
+.water-drop-btn-lg { background: none; border: none; font-size: 26px; padding: 4px; transition: transform 0.1s ease; }
+.water-drop-btn-lg:hover { transform: scale(1.15); }
+
+.posture-timer { font-family: var(--font-display); font-size: 44px; font-weight: 700; color: var(--text-primary); margin: var(--space-4) 0; font-variant-numeric: tabular-nums; }
+
+.health-log-value { font-family: var(--font-display); font-size: 34px; font-weight: 700; margin-bottom: var(--space-4); }
+.health-log-form { display: flex; gap: var(--space-2); }
+
+@media (max-width: 700px) {
+  .health-grid { grid-template-columns: 1fr; }
+}

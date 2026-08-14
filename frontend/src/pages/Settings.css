@@ -1,0 +1,52 @@
+.settings-page {
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.settings-card {
+  padding: var(--space-6) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.settings-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--gold-500);
+  color: var(--ink-950);
+  font-weight: 700;
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-2);
+}
+
+.settings-field {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-label {
+  color: var(--text-muted);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.settings-value {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.settings-logout {
+  width: 100%;
+  margin-top: var(--space-4);
+  border: 1px solid var(--rose-100);
+  border-radius: var(--radius-md);
+  padding: 11px;
+}

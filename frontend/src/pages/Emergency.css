@@ -1,0 +1,33 @@
+.emergency-page { max-width: 900px; margin: 0 auto; }
+
+.emergency-banner {
+  padding: var(--space-4) var(--space-5);
+  background: linear-gradient(135deg, rgba(249,82,108,0.18), rgba(249,82,108,0.06));
+  border-color: rgba(249,82,108,0.35);
+  margin-bottom: var(--space-4);
+}
+.emergency-banner h2 { font-size: 17px; color: #fca5b5; margin-bottom: 4px; }
+.emergency-banner p { font-size: 13px; color: var(--text-secondary); }
+
+.emergency-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); align-items: start; }
+
+.panel-top-row { display: flex; justify-content: space-between; align-items: center; }
+.small-btn { padding: 6px 12px; font-size: 12.5px; }
+
+.emergency-form { display: flex; flex-direction: column; gap: var(--space-2); }
+
+.medical-info { display: flex; flex-direction: column; gap: var(--space-2); }
+.medical-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+.medical-row span { color: var(--text-muted); }
+
+.contact-list { list-style: none; margin: 0 0 var(--space-3); padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.contact-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: var(--surface-muted); border-radius: var(--radius-md); }
+.contact-name { font-weight: 600; font-size: 14px; }
+.contact-relation { color: var(--text-muted); font-weight: 400; font-size: 12px; }
+.contact-phone { font-size: 12.5px; color: var(--text-secondary); }
+
+.contact-form { display: flex; flex-direction: column; gap: var(--space-2); }
+
+@media (max-width: 750px) {
+  .emergency-grid { grid-template-columns: 1fr; }
+}

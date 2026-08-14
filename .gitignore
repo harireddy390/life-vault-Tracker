@@ -1,0 +1,24 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies
+**/node_modules/
+
+# User uploads
+backend/uploads/
+
+# Build output
+**/dist/
+**/build/
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db

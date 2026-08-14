@@ -1,0 +1,63 @@
+.dash { max-width: 1140px; margin: 0 auto; }
+
+.dash-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: var(--space-5); gap: var(--space-3); flex-wrap: wrap;
+}
+.dash-header h1 { font-size: 26px; }
+.dash-subtitle { color: var(--text-secondary); margin-top: 4px; font-size: 14.5px; }
+
+.dash > .global-search { margin-bottom: var(--space-5); }
+
+.stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-4); margin-bottom: var(--space-5); }
+
+.stat-card { padding: var(--space-4) var(--space-4) var(--space-3); display: flex; flex-direction: column; gap: 6px; }
+.stat-top { display: flex; align-items: center; gap: 8px; }
+.stat-icon { font-size: 16px; }
+.stat-label { color: var(--text-muted); font-size: 12.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+.stat-value { font-family: var(--font-display); font-size: 26px; font-weight: 700; color: var(--text-primary); }
+.stat-unit { font-size: 14px; color: var(--text-muted); font-weight: 500; }
+
+.dash-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: var(--space-5); align-items: start; }
+.dash-main, .dash-side { display: flex; flex-direction: column; gap: var(--space-4); }
+
+.ai-panel { background: linear-gradient(160deg, rgba(109,107,255,0.14), rgba(139,92,246,0.06)); border-color: rgba(109,107,255,0.3); }
+.ai-insight { font-size: 14.5px; color: var(--text-primary); margin-bottom: var(--space-4); line-height: 1.5; }
+
+.timer-display { font-family: var(--font-display); font-size: 52px; font-weight: 700; text-align: center; color: var(--text-primary); margin-bottom: var(--space-4); font-variant-numeric: tabular-nums; }
+.timer-controls { display: flex; gap: var(--space-2); justify-content: center; }
+
+.task-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.task-row { display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; background: var(--surface-muted); border-radius: var(--radius-md); gap: var(--space-2); }
+.task-checkbox { display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; min-width: 0; }
+.task-checkbox input { width: 17px; height: 17px; accent-color: var(--gold-500); flex-shrink: 0; }
+.task-checkbox span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-done .task-checkbox span { text-decoration: line-through; color: var(--text-muted); }
+
+.doc-mini-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.doc-mini-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--surface-muted); border-radius: var(--radius-md); font-size: 13.5px; }
+.doc-mini-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-mini-date { color: var(--text-muted); font-size: 12px; flex-shrink: 0; }
+
+.goal-mini-list { display: flex; flex-direction: column; gap: var(--space-3); }
+.goal-mini-top { display: flex; justify-content: space-between; font-size: 13.5px; margin-bottom: 6px; }
+.goal-mini-top span:last-child { color: var(--text-muted); font-weight: 600; }
+
+.expense-total { font-family: var(--font-display); font-size: 30px; font-weight: 700; color: var(--text-primary); margin-bottom: var(--space-2); }
+
+.puzzle-title { font-size: 16px; margin-bottom: var(--space-2); }
+.puzzle-code { display: inline-block; background: var(--ink-950); color: #b3b1ff; padding: 8px 14px; border-radius: var(--radius-sm); font-size: 13px; border: 1px solid var(--border); }
+
+.water-drops { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; margin-bottom: var(--space-2); }
+.water-drop-btn { background: none; border: none; font-size: 22px; padding: 2px; transition: transform 0.1s ease; }
+.water-drop-btn:hover { transform: scale(1.15); }
+
+@media (max-width: 900px) {
+  .dash-grid { grid-template-columns: 1fr; }
+  .stat-row { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 600px) {
+  .dash-header h1 { font-size: 21px; }
+  .timer-display { font-size: 42px; }
+}

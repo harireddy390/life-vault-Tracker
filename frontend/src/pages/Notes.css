@@ -1,0 +1,90 @@
+.notes-page {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.note-form-card {
+  padding: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.note-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.note-textarea {
+  resize: vertical;
+  font-family: var(--font-body);
+}
+
+.note-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.notes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-4);
+}
+
+.note-card {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.note-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.note-card-header h3 {
+  font-size: 16px;
+  word-break: break-word;
+}
+
+.pin-btn {
+  background: none;
+  border: none;
+  font-size: 15px;
+  opacity: 0.3;
+  flex-shrink: 0;
+}
+.pin-btn-active {
+  opacity: 1;
+}
+
+.note-card-content {
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  flex: 1;
+}
+
+.note-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.note-edit-btn {
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+@media (max-width: 500px) {
+  .notes-grid {
+    grid-template-columns: 1fr;
+  }
+}

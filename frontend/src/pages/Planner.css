@@ -1,0 +1,95 @@
+.planner {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.page-header {
+  margin-bottom: var(--space-5);
+}
+.page-header h1 {
+  font-size: 24px;
+}
+.page-subtitle {
+  color: var(--text-secondary);
+  font-size: 14.5px;
+  margin-top: 4px;
+}
+
+.planner-form-card {
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.planner-form {
+  display: flex;
+  gap: var(--space-2);
+}
+.planner-form .input {
+  flex: 1;
+}
+.priority-select {
+  flex: 0 0 160px;
+}
+
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.filter-chip {
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-secondary);
+  padding: 7px 16px;
+  border-radius: var(--radius-pill);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.filter-chip-active {
+  background: var(--ink-950);
+  border-color: var(--ink-950);
+  color: var(--text-inverse);
+}
+
+.filter-count {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.planner-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.planner-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4);
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.planner-row-done .task-checkbox span {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.planner-row-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+@media (max-width: 600px) {
+  .planner-form {
+    flex-direction: column;
+  }
+  .priority-select {
+    flex: 1;
+  }
+}
