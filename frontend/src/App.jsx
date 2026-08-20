@@ -34,6 +34,7 @@ function App() {
         <Route path="/health" element={<Health />} />
         <Route path="/goals" element={<Goals />} />
         <Route path="/planner" element={<Planner />} />
+        <Route path="/progress" element={<Planner />} />
         <Route path="/notes" element={<Notes />} />
         <Route path="/finance" element={<Finance />} />
         <Route path="/family" element={<Family />} />

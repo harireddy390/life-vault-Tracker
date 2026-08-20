@@ -1,0 +1,17 @@
+.daily-progress { display: flex; flex-direction: column; gap: var(--space-3); }
+
+.daily-progress-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.daily-progress-date { font-family: var(--font-display); font-weight: 700; font-size: 15px; }
+.daily-progress-sub { color: var(--text-muted); font-size: 12.5px; margin-top: 2px; }
+
+.daily-progress-ring { width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.daily-progress-ring-center { width: 42px; height: 42px; border-radius: 50%; background: var(--surface); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+
+.daily-task-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); max-height: 340px; overflow-y: auto; }
+.daily-task-row { padding: 10px 12px; background: var(--surface-muted); border-radius: var(--radius-md); }
+.daily-task-checkbox { display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; }
+.daily-task-checkbox input { width: 17px; height: 17px; accent-color: var(--gold-500); flex-shrink: 0; }
+.daily-task-star { color: var(--gold-500); margin-right: 2px; }
+.daily-task-done .daily-task-checkbox span { text-decoration: line-through; color: var(--text-muted); }
+
+.daily-add-btn { margin-top: var(--space-2); }

@@ -1,95 +1,230 @@
-.planner {
-  max-width: 800px;
+/* =================================================================
+   LIFE VAULT: MODERN PLANNER & TRACKER STYLING (FIXED TEXT CONTRAST)
+   ================================================================ */
+
+.planner-page {
+  padding: 2rem;
+  max-width: 1400px;
   margin: 0 auto;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  color: #0f172a; /* Darker, high-contrast primary text */
+  background-color: #f8fafc;
+  min-height: 100vh;
 }
 
-.page-header {
-  margin-bottom: var(--space-5);
-}
-.page-header h1 {
-  font-size: 24px;
-}
-.page-subtitle {
-  color: var(--text-secondary);
-  font-size: 14.5px;
-  margin-top: 4px;
-}
-
-.planner-form-card {
-  padding: var(--space-4);
-  margin-bottom: var(--space-4);
-}
-
-.planner-form {
+/* Hero Section */
+.planner-hero {
   display: flex;
-  gap: var(--space-2);
-}
-.planner-form .input {
-  flex: 1;
-}
-.priority-select {
-  flex: 0 0 160px;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 2rem;
+  background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%);
+  padding: 2.5rem;
+  border-radius: 1.5rem;
+  color: #ffffff; /* Explicitly white for hero banner */
+  box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.3);
 }
 
-.filter-row {
+.planner-hero-text h1 {
+  font-size: 2.25rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  margin-bottom: 0.5rem;
+  color: #ffffff; /* Guaranteed visible */
+}
+
+.page-subtitle {
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.95); /* High contrast light text on dark gradient */
+  max-width: 600px;
+  line-height: 1.5;
+}
+
+.planner-hero-actions .btn-primary {
+  background: #ffffff;
+  color: #2563eb;
+  font-weight: 700;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  transition: all 0.2s ease-in-out;
+  border: none;
+  cursor: pointer;
+}
+
+.planner-hero-actions .btn-primary:hover {
+  background: #f1f5f9;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(0,0,0,0.15);
+}
+
+/* Tabs Bar */
+.planner-tabs-bar {
+  margin-bottom: 2rem;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  gap: 1rem;
+}
+
+.planner-tabs-group {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.planner-tab-btn {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-4);
-}
-
-.filter-chip {
-  border: 1px solid var(--border-strong);
-  background: var(--surface);
-  color: var(--text-secondary);
-  padding: 7px 16px;
-  border-radius: var(--radius-pill);
-  font-size: 13.5px;
+  gap: 0.5rem;
+  padding: 0.875rem 1.25rem;
   font-weight: 600;
-}
-.filter-chip-active {
-  background: var(--ink-950);
-  border-color: var(--ink-950);
-  color: var(--text-inverse);
-}
-
-.filter-count {
-  margin-left: auto;
-  font-size: 13px;
-  color: var(--text-muted);
+  font-size: 0.95rem;
+  color: #475569; /* Clear gray, fully readable */
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
-.planner-list {
+.planner-tab-btn:hover {
+  color: #0f172a;
+}
+
+.tab-btn-active {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+  background: #ffffff;
+  border-top-left-radius: 0.5rem;
+  border-top-right-radius: 0.5rem;
+  box-shadow: 0 -2px 6px rgba(0,0,0,0.02);
+}
+
+/* Split Layout for Calendar & Daily Tasks */
+.planner-split-layout {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 2rem;
+}
+
+@media (max-width: 1024px) {
+  .planner-split-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Cards & Panels */
+.card {
+  background: #ffffff;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  border: 1px solid #e2e8f0;
+  color: #0f172a;
+  transition: box-shadow 0.2s;
+}
+
+.card:hover {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+}
+
+/* Headings and Subtitles inside cards */
+.card h2, .card h3 {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+/* Analytics & Grid previews */
+.month-grid-preview {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.month-day-cell {
+  aspect-ratio: 1;
+  border-radius: 0.5rem;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  transition: all 0.15s ease;
 }
 
-.planner-row {
+.month-day-cell:hover {
+  transform: scale(1.05);
+  border-color: #2563eb;
+}
+
+.cell-high { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+.cell-partial { background: #fef9c3; color: #854d0e; border-color: #fef08a; }
+.cell-zero { background: #fee2e2; color: #991b1b; border-color: #fecaca; }
+.cell-selected { box-shadow: 0 0 0 2px #2563eb; }
+
+/* Habit Cards Grid in Analytics */
+.habit-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+}
+
+.habit-summary-card {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.875rem;
+  padding: 1.25rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.habit-summary-card:hover {
+  border-color: #2563eb;
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.08);
+}
+
+.habit-summary-top {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  padding: var(--space-4);
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
-.planner-row-done .task-checkbox span {
-  text-decoration: line-through;
-  color: var(--text-muted);
-}
-
-.planner-row-meta {
-  display: flex;
   align-items: center;
-  gap: var(--space-3);
+  margin-bottom: 0.5rem;
 }
 
-@media (max-width: 600px) {
-  .planner-form {
-    flex-direction: column;
-  }
-  .priority-select {
-    flex: 1;
-  }
+.habit-summary-title {
+  font-weight: 700;
+  color: #0f172a; /* Deep black-blue for high visibility */
+  font-size: 1.05rem;
 }
+
+.habit-summary-desc {
+  color: #475569; /* Clear, legible description text */
+  font-size: 0.9rem;
+  margin-bottom: 0.75rem;
+}
+
+.view-detail-link {
+  font-size: 0.8rem;
+  color: #2563eb;
+  font-weight: 700;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.25rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.badge-violet { background: #ede9fe; color: #6d28d9; }
+.badge-teal { background: #ccfbf1; color: #0f766e; }

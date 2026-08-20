@@ -90,7 +90,7 @@ function ChatTab() {
       const { reply } = await aiService.sendMessage(nextMessages, includeContext);
       setMessages((prev) => [...prev, { role: 'assistant', content: reply }]);
     } catch (err) {
-      setError(err.response?.data?.message || 'Life AI could not respond. Check that ANTHROPIC_API_KEY is set in backend/.env.');
+       setError(err.response?.data?.error || err.response?.data?.message || 'Life AI could not respond. Check that GROQ_API_KEY is set in backend/.env.');
     } finally {
       setSending(false);
     }
@@ -155,7 +155,7 @@ export default function LifeAI() {
       <div className="page-header">
         <h1>{'\u2728'} Life AI</h1>
         <p className="page-subtitle">
-          Chat is a real conversation with Claude, run through your own backend — your API key never touches
+          Chat is a real conversation with an LLM (Groq), run through your own backend — your API key never touches
           the browser. Insights below are separate: honest, rule-based summaries of your real data, not AI-generated.
         </p>
       </div>
