@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
-const Task = require('../models/tasks');
+const Habit = require('../models/habits');
 const Progress = require('../models/Progress');
 const { protect } = require('../middleware/authMiddleware');
 const {
@@ -13,13 +13,11 @@ const {
   calculateTaskMetrics,
 } = require('../services/streakService');
 
-// Helper to validate YYYY-MM-DD
 const isValidDateStr = (dateStr) => {
   return /^\d{4}-\d{2}-\d{2}$/.test(dateStr) && !isNaN(Date.parse(dateStr));
 };
 
 // @route   GET /api/progress/date/:date
-// @desc    Get all scheduled tasks and user completion records for a specific calendar date
 router.get('/date/:date', protect, async (req, res) => {
   try {
     const { date } = req.params;
@@ -27,39 +25,27 @@ router.get('/date/:date', protect, async (req, res) => {
       return res.status(400).json({ message: 'Invalid date format. Expected YYYY-MM-DD' });
     }
 
-    // Find all active tasks belonging to this user
-    const tasks = await Task.find({ user: req.user.id, active: true }).sort({ important: -1, createdAt: -1 });
+    const habits = await Habit.find({ user: req.user.id, active: true }).sort({ important: -1, createdAt: -1 });
+    const scheduledHabits = habits.filter((h) => isTaskScheduledOnDate(h, date));
 
-    // Filter tasks that are scheduled on this specific date
-    const scheduledTasks = tasks.filter((t) => isTaskScheduledOnDate(t, date));
-
-    // Find progress records for this user and date
-    const progressRecords = await Progress.find({
-      user: req.user.id,
-      date,
-    });
-
+    const progressRecords = await Progress.find({ user: req.user.id, date });
     const progressMap = new Map();
-    progressRecords.forEach((pr) => {
-      progressMap.set(pr.task.toString(), pr);
-    });
+    progressRecords.forEach((pr) => { progressMap.set(pr.task.toString(), pr); });
 
-    // Merge tasks with completion status
-    const taskProgressList = scheduledTasks.map((t) => {
-      const record = progressMap.get(t._id.toString());
+    const taskProgressList = scheduledHabits.map((h) => {
+      const record = progressMap.get(h._id.toString());
       return {
-        _id: t._id,
+        _id: h._id,
         progressId: record ? record._id : null,
-        title: t.text,
-        text: t.text,
-        description: t.description || '',
-        important: Boolean(t.important),
-        frequency: t.frequency,
-        daysOfWeek: t.daysOfWeek,
-        startDate: t.startDate,
-        endDate: t.endDate,
-        reminderTime: t.reminderTime || '',
-        priority: t.priority || 'medium',
+        title: h.title,
+        text: h.title,
+        description: h.description || '',
+        important: Boolean(h.important),
+        frequency: h.frequency,
+        daysOfWeek: h.daysOfWeek,
+        startDate: h.startDate,
+        endDate: h.endDate,
+        reminderTime: h.reminderTime || '',
         completed: record ? Boolean(record.completed) : false,
         completedAt: record ? record.completedAt : null,
       };
@@ -89,11 +75,10 @@ router.get('/date/:date', protect, async (req, res) => {
 });
 
 // @route   GET /api/progress/month/:year/:month
-// @desc    Get monthly overview and day-by-day stats for calendar view
 router.get('/month/:year/:month', protect, async (req, res) => {
   try {
     const year = parseInt(req.params.year, 10);
-    const month = parseInt(req.params.month, 10); // 1-12
+    const month = parseInt(req.params.month, 10);
 
     if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
       return res.status(400).json({ message: 'Invalid year or month' });
@@ -103,21 +88,16 @@ router.get('/month/:year/:month', protect, async (req, res) => {
     const prefix = `${year}-${monthStr}`;
     const daysInMonth = new Date(year, month, 0).getDate();
 
-    // Fetch user tasks
-    const tasks = await Task.find({ user: req.user.id, active: true });
+    const habits = await Habit.find({ user: req.user.id, active: true });
 
-    // Fetch user progress for the month
     const progressRecords = await Progress.find({
       user: req.user.id,
       date: { $regex: `^${prefix}` },
     });
 
-    // Group progress by date
     const progressByDate = {};
     progressRecords.forEach((pr) => {
-      if (!progressByDate[pr.date]) {
-        progressByDate[pr.date] = [];
-      }
+      if (!progressByDate[pr.date]) progressByDate[pr.date] = [];
       progressByDate[pr.date].push(pr);
     });
 
@@ -131,19 +111,14 @@ router.get('/month/:year/:month', protect, async (req, res) => {
       const dayStr = String(day).padStart(2, '0');
       const dateKey = `${prefix}-${dayStr}`;
 
-      const scheduledForDay = tasks.filter((t) => isTaskScheduledOnDate(t, dateKey));
+      const scheduledForDay = habits.filter((h) => isTaskScheduledOnDate(h, dateKey));
       const recordsForDay = progressByDate[dateKey] || [];
       const completedForDay = recordsForDay.filter((r) => r.completed).length;
       const scheduledCount = scheduledForDay.length;
       const percentage = scheduledCount > 0 ? Math.round((completedForDay / scheduledCount) * 100) : 0;
 
-      if (completedForDay > 0) {
-        activeDaysCount++;
-      }
-
-      if (percentage > bestDayPercentage) {
-        bestDayPercentage = percentage;
-      }
+      if (completedForDay > 0) activeDaysCount++;
+      if (percentage > bestDayPercentage) bestDayPercentage = percentage;
 
       totalMonthCompleted += completedForDay;
       totalMonthScheduled += scheduledCount;
@@ -167,9 +142,8 @@ router.get('/month/:year/:month', protect, async (req, res) => {
       ? Math.round((totalMonthCompleted / totalMonthScheduled) * 100)
       : 0;
 
-    // Get overall streaks
     const allUserProgress = await Progress.find({ user: req.user.id });
-    const streaks = calculateStreaks(allUserProgress, tasks);
+    const streaks = calculateStreaks(allUserProgress, habits);
 
     res.status(200).json({
       year,
@@ -191,15 +165,14 @@ router.get('/month/:year/:month', protect, async (req, res) => {
 });
 
 // @route   GET /api/progress/stats
-// @desc    Get overall streaks and activity stats across all time
 router.get('/stats', protect, async (req, res) => {
   try {
-    const [tasks, progressRecords] = await Promise.all([
-      Task.find({ user: req.user.id }),
+    const [habits, progressRecords] = await Promise.all([
+      Habit.find({ user: req.user.id }),
       Progress.find({ user: req.user.id }),
     ]);
 
-    const streakData = calculateStreaks(progressRecords, tasks);
+    const streakData = calculateStreaks(progressRecords, habits);
     res.status(200).json(streakData);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -207,20 +180,14 @@ router.get('/stats', protect, async (req, res) => {
 });
 
 // @route   GET /api/progress/matrix
-// @desc    Get multi-day matrix for habit tracking grid (habits x recent dates)
 router.get('/matrix', protect, async (req, res) => {
   try {
     let { startDate, endDate, days = 7 } = req.query;
 
     const today = new Date();
-    if (!endDate) {
-      endDate = formatDateKey(today);
-    }
-    if (!startDate) {
-      startDate = addDays(endDate, -(parseInt(days, 10) - 1));
-    }
+    if (!endDate) endDate = formatDateKey(today);
+    if (!startDate) startDate = addDays(endDate, -(parseInt(days, 10) - 1));
 
-    // Generate list of dates in range
     const dates = [];
     let cur = startDate;
     while (cur <= endDate) {
@@ -228,7 +195,7 @@ router.get('/matrix', protect, async (req, res) => {
       cur = addDays(cur, 1);
     }
 
-    const tasks = await Task.find({ user: req.user.id, active: true }).sort({ important: -1, createdAt: -1 });
+    const habits = await Habit.find({ user: req.user.id, active: true }).sort({ important: -1, createdAt: -1 });
 
     const progressRecords = await Progress.find({
       user: req.user.id,
@@ -241,52 +208,42 @@ router.get('/matrix', protect, async (req, res) => {
       progressLookup[key] = pr.completed;
     });
 
-    // Build matrix row for each task
-    const matrix = tasks.map((task) => {
+    const matrix = habits.map((habit) => {
       const taskDays = {};
       let taskCompletedCount = 0;
       let taskScheduledCount = 0;
 
       dates.forEach((d) => {
-        const isScheduled = isTaskScheduledOnDate(task, d);
-        const isCompleted = Boolean(progressLookup[`${task._id.toString()}_${d}`]);
+        const isScheduled = isTaskScheduledOnDate(habit, d);
+        const isCompleted = Boolean(progressLookup[`${habit._id.toString()}_${d}`]);
         if (isScheduled) {
           taskScheduledCount++;
           if (isCompleted) taskCompletedCount++;
         }
-        taskDays[d] = {
-          isScheduled,
-          completed: isCompleted,
-        };
+        taskDays[d] = { isScheduled, completed: isCompleted };
       });
 
       const rate = taskScheduledCount > 0 ? Math.round((taskCompletedCount / taskScheduledCount) * 100) : 0;
 
       return {
-        _id: task._id,
-        title: task.text,
-        description: task.description || '',
-        important: Boolean(task.important),
-        frequency: task.frequency,
-        reminderTime: task.reminderTime || '',
+        _id: habit._id,
+        title: habit.title,
+        description: habit.description || '',
+        important: Boolean(habit.important),
+        frequency: habit.frequency,
+        reminderTime: habit.reminderTime || '',
         completionRate: rate,
         days: taskDays,
       };
     });
 
-    res.status(200).json({
-      startDate,
-      endDate,
-      dates,
-      matrix,
-    });
+    res.status(200).json({ startDate, endDate, dates, matrix });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
 // @route   GET /api/progress/task/:taskId/detail
-// @desc    Get detailed individual habit analytics (score, streaks, heatmap history)
 router.get('/task/:taskId/detail', protect, async (req, res) => {
   try {
     const { taskId } = req.params;
@@ -294,8 +251,8 @@ router.get('/task/:taskId/detail', protect, async (req, res) => {
       return res.status(400).json({ message: 'Invalid task ID' });
     }
 
-    const task = await Task.findOne({ _id: taskId, user: req.user.id });
-    if (!task) {
+    const habit = await Habit.findOne({ _id: taskId, user: req.user.id });
+    if (!habit) {
       return res.status(404).json({ message: 'Task not found' });
     }
 
@@ -304,20 +261,15 @@ router.get('/task/:taskId/detail', protect, async (req, res) => {
       task: taskId,
     }).sort({ date: -1 });
 
-    const metrics = calculateTaskMetrics(task, progressRecords);
+    const metrics = calculateTaskMetrics(habit, progressRecords);
 
-    res.status(200).json({
-      task,
-      metrics,
-      history: progressRecords,
-    });
+    res.status(200).json({ task: habit, metrics, history: progressRecords });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
 // @route   POST /api/progress/toggle
-// @desc    Toggle or set completion status for a specific task and calendar date
 router.post('/toggle', protect, async (req, res) => {
   try {
     const { taskId, date, completed } = req.body;
@@ -329,44 +281,23 @@ router.post('/toggle', protect, async (req, res) => {
       return res.status(400).json({ message: 'Invalid date format (expected YYYY-MM-DD)' });
     }
 
-    // Verify task exists and belongs to user
-    const task = await Task.findOne({ _id: taskId, user: req.user.id });
-    if (!task) {
+    const habit = await Habit.findOne({ _id: taskId, user: req.user.id });
+    if (!habit) {
       return res.status(404).json({ message: 'Task not found or unauthorized' });
     }
 
-    // Determine target completed status
     let newCompletedStatus = true;
     if (typeof completed === 'boolean') {
       newCompletedStatus = completed;
     } else {
-      // Toggle current status
-      const existing = await Progress.findOne({
-        user: req.user.id,
-        task: taskId,
-        date,
-      });
-      if (existing) {
-        newCompletedStatus = !existing.completed;
-      }
+      const existing = await Progress.findOne({ user: req.user.id, task: taskId, date });
+      if (existing) newCompletedStatus = !existing.completed;
     }
 
-    // Atomic upsert
     const progressRecord = await Progress.findOneAndUpdate(
-      {
-        user: req.user.id,
-        task: taskId,
-        date,
-      },
-      {
-        completed: newCompletedStatus,
-        completedAt: newCompletedStatus ? new Date() : null,
-      },
-      {
-        new: true,
-        upsert: true,
-        setDefaultsOnInsert: true,
-      }
+      { user: req.user.id, task: taskId, date },
+      { completed: newCompletedStatus, completedAt: newCompletedStatus ? new Date() : null },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
     );
 
     res.status(200).json({
@@ -382,7 +313,6 @@ router.post('/toggle', protect, async (req, res) => {
 });
 
 // @route   POST /api/progress
-// @desc    Create or update progress record
 router.post('/', protect, async (req, res) => {
   try {
     const { taskId, date, completed = true } = req.body;
@@ -394,8 +324,8 @@ router.post('/', protect, async (req, res) => {
       return res.status(400).json({ message: 'Invalid date format (expected YYYY-MM-DD)' });
     }
 
-    const task = await Task.findOne({ _id: taskId, user: req.user.id });
-    if (!task) {
+    const habit = await Habit.findOne({ _id: taskId, user: req.user.id });
+    if (!habit) {
       return res.status(404).json({ message: 'Task not found or unauthorized' });
     }
 
@@ -412,7 +342,6 @@ router.post('/', protect, async (req, res) => {
 });
 
 // @route   PUT /api/progress/:id
-// @desc    Update progress record by ID
 router.put('/:id', protect, async (req, res) => {
   try {
     const record = await Progress.findById(req.params.id);
@@ -430,6 +359,57 @@ router.put('/:id', protect, async (req, res) => {
 
     await record.save();
     res.status(200).json(record);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// @route   GET /api/progress/year/:year
+router.get('/year/:year', protect, async (req, res) => {
+  try {
+    const year = Number(req.params.year);
+    if (!year) {
+      return res.status(400).json({ message: 'Invalid year' });
+    }
+
+    const firstDate = `${year}-01-01`;
+    const lastDate = `${year}-12-31`;
+
+    const allHabits = await Habit.find({ user: req.user.id });
+
+    const records = await Progress.find({
+      user: req.user.id,
+      date: { $gte: firstDate, $lte: lastDate },
+    });
+    const recordsByDate = new Map();
+    records.forEach((r) => {
+      if (!recordsByDate.has(r.date)) recordsByDate.set(r.date, []);
+      recordsByDate.get(r.date).push(r);
+    });
+
+    const start = new Date(Date.UTC(year, 0, 1));
+    const end = new Date(Date.UTC(year, 11, 31));
+    const days = [];
+    for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+      const y = d.getUTCFullYear();
+      const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(d.getUTCDate()).padStart(2, '0');
+      const dateStr = `${y}-${m}-${day}`;
+
+      const scheduled = allHabits.filter((h) => isTaskScheduledOnDate(h, dateStr));
+      const dayRecords = recordsByDate.get(dateStr) || [];
+      const completedCount = dayRecords.filter((r) => r.completed).length;
+      const totalCount = scheduled.length;
+
+      days.push({
+        date: dateStr,
+        completedCount,
+        totalCount,
+        percentage: totalCount ? Math.round((completedCount / totalCount) * 100) : 0,
+      });
+    }
+
+    res.status(200).json({ year, days });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

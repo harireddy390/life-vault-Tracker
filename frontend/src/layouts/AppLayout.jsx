@@ -43,10 +43,10 @@ export default function AppLayout() {
   const user = authService.getCurrentUser();
 
   const handleLogout = () => {
+    if (!window.confirm('Log out of Life Vault?')) return;
     authService.logout();
     navigate('/login');
   };
-
   const closeDrawer = () => setDrawerOpen(false);
 
   const goQuickAdd = (to) => {

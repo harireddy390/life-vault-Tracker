@@ -1,21 +1,4 @@
-.habit-modal-backdrop { position: fixed; inset: 0; background: rgba(3,5,12,0.7); display: flex; align-items: center; justify-content: center; z-index: 200; padding: var(--space-4); }
-.habit-modal { width: 100%; max-width: 440px; max-height: 88vh; overflow-y: auto; background: var(--surface-elevated); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); }
-.habit-modal-header { display: flex; justify-content: space-between; align-items: center; padding: var(--space-4); border-bottom: 1px solid var(--border); font-weight: 700; position: sticky; top: 0; background: var(--surface-elevated); }
-.habit-modal-close { background: none; border: none; color: var(--text-secondary); font-size: 24px; line-height: 1; }
-.habit-modal-close:hover { color: var(--text-primary); }
-.habit-modal-form { padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); }
+/* find: */
 .habit-modal-error { background: var(--rose-100); color: #fca5b5; padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; }
-
-.habit-important-toggle { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--text-secondary); }
-.habit-important-toggle input { accent-color: var(--gold-500); }
-
-.habit-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
-.habit-field-label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
-
-.habit-days-row { display: flex; gap: 6px; flex-wrap: wrap; }
-.habit-day-btn { border: 1px solid var(--border-strong); background: var(--surface-muted); color: var(--text-secondary); width: 40px; height: 34px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; }
-.habit-day-btn-active { background: linear-gradient(135deg, var(--gold-500), var(--violet-600)); color: #fff; border-color: transparent; }
-
-@media (max-width: 420px) {
-  .habit-form-row { grid-template-columns: 1fr; }
-}
+/* replace with: */
+.habit-modal-error { background: var(--rose-100); color: var(--rose-600); padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; }

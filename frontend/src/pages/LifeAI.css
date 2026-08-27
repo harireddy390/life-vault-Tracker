@@ -1,66 +1,10 @@
-.lifeai-page { max-width: 800px; margin: 0 auto; }
-.lifeai-page .page-subtitle { margin-top: var(--space-2); line-height: 1.6; }
-
-.lifeai-tabs { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); }
-.lifeai-tab {
-  border: 1px solid var(--border-strong); background: var(--surface);
-  color: var(--text-secondary); padding: 8px 18px; border-radius: var(--radius-pill);
-  font-size: 13.5px; font-weight: 600;
-}
-.lifeai-tab-active { background: linear-gradient(135deg, var(--gold-500), var(--violet-600)); color: #fff; border-color: transparent; }
-
-/* ---------- Insights ---------- */
-.insight-list { display: flex; flex-direction: column; gap: var(--space-3); }
+/* find: */
 .insight-card { padding: var(--space-4); display: flex; align-items: flex-start; gap: var(--space-3); background: linear-gradient(160deg, rgba(109,107,255,0.1), rgba(139,92,246,0.04)); }
-.insight-icon { font-size: 22px; flex-shrink: 0; }
-.insight-body { flex: 1; min-width: 0; }
-.insight-title { font-weight: 700; font-size: 14.5px; margin-bottom: 4px; }
-.insight-text { color: var(--text-secondary); font-size: 13.5px; line-height: 1.5; }
-.insight-action { flex-shrink: 0; padding: 8px 14px; font-size: 13px; }
-
-/* ---------- Chat ---------- */
-.chat-tab {
-  display: flex; flex-direction: column; height: 62vh; min-height: 420px;
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
-  overflow: hidden;
-}
-
-.chat-context-toggle { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); font-size: 12.5px; color: var(--text-secondary); }
-.chat-context-toggle label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
-.chat-context-toggle input { accent-color: var(--gold-500); }
-
-.chat-messages { flex: 1; overflow-y: auto; padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); }
-
-.chat-empty { text-align: center; margin: auto; color: var(--text-muted); }
-.chat-empty-title { font-size: 15px; font-weight: 600; margin-bottom: var(--space-3); color: var(--text-secondary); }
-.chat-suggestions { display: flex; flex-direction: column; gap: 8px; max-width: 320px; margin: 0 auto; }
-.chat-suggestion-btn {
-  background: var(--surface-muted); border: 1px solid var(--border); color: var(--text-secondary);
-  padding: 10px 14px; border-radius: var(--radius-md); font-size: 13px; text-align: left;
-}
-.chat-suggestion-btn:hover { border-color: var(--border-strong); color: var(--text-primary); }
-
-.chat-bubble-row { display: flex; }
-.chat-row-user { justify-content: flex-end; }
-
-.chat-bubble { max-width: 80%; padding: 10px 14px; border-radius: var(--radius-md); font-size: 14px; line-height: 1.5; }
-.chat-bubble-ai { background: var(--surface-muted); border: 1px solid var(--border); }
-.chat-bubble-user { background: linear-gradient(135deg, var(--gold-500), var(--violet-600)); color: #fff; }
-.chat-typing { display: flex; align-items: center; gap: 8px; }
-
-.chat-error { align-self: center; color: #fca5b5; font-size: 13px; text-align: center; padding: var(--space-2); }
-
-.chat-input-row { display: flex; gap: var(--space-2); padding: var(--space-3); border-top: 1px solid var(--border); }
-.chat-input-row .input { flex: 1; }
-
-/* ---------- Markdown-lite rendering ---------- */
-.md-lite .md-para { margin-bottom: 8px; }
-.md-lite .md-para:last-child { margin-bottom: 0; }
+/* replace with: */
+.insight-card { padding: var(--space-4); display: flex; align-items: flex-start; gap: var(--space-3); background: linear-gradient(160deg, rgba(79,70,229,0.06), rgba(37,99,235,0.03)); }
+/* find: */
 .md-inline-code { background: rgba(0,0,0,0.25); padding: 1px 6px; border-radius: 4px; font-size: 12.5px; }
 .md-code-block { background: var(--ink-950); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; overflow-x: auto; font-size: 12.5px; margin: 8px 0; }
-.md-list { margin: 8px 0; padding-left: 20px; }
-.md-list li { margin-bottom: 4px; }
-
-@media (max-width: 600px) {
-  .chat-tab { height: 70vh; }
-}
+/* replace with: */
+.md-inline-code { background: rgba(79,70,229,0.08); color: var(--gold-600); padding: 1px 6px; border-radius: 4px; font-size: 12.5px; }
+.md-code-block { background: var(--ink-950); color: var(--text-inverse); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; overflow-x: auto; font-size: 12.5px; margin: 8px 0; }

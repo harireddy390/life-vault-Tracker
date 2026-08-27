@@ -1,5 +1,5 @@
 import api from '../api/axiosConfig';
-
+const getYearProgress = async (year) => (await api.get(`/progress/year/${year}`)).data;
 const getDateProgress = async (date) => (await api.get(`/progress/date/${date}`)).data;
 const getMonthProgress = async (year, month) => (await api.get(`/progress/month/${year}/${month}`)).data;
 const setProgress = async (taskId, date, completed) =>
@@ -12,13 +12,4 @@ const getStreakStats = async () => (await api.get('/progress/stats')).data;
 const toggleTaskProgress = async (taskId, date, completed) => 
   (await api.post('/progress/toggle', { taskId, date, completed })).data;
 
-export default { 
-  getDateProgress, 
-  getProgressByDate: getDateProgress, // Alias
-  getMonthProgress, 
-  setProgress, 
-  getStats,
-  getProgressMatrix,
-  getStreakStats,
-  toggleTaskProgress
-};
+export default { getDateProgress, getMonthProgress, setProgress, getStats, getYearProgress };
