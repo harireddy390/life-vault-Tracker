@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import authService from '../services/authService';
+import GlobalSearch from '../components/GlobalSearch';
 import './AppLayout.css';
 
 const NAV_ITEMS = [
@@ -17,7 +18,6 @@ const NAV_ITEMS = [
   { to: '/emergency', label: 'Emergency', icon: '\u{1F6A8}' },
 ];
 
-// The five that fit on the mobile bottom bar, plus a center Add button
 const MOBILE_TABS = [
   { to: '/dashboard', label: 'Home', icon: '\u{1F3E0}' },
   { to: '/vault', label: 'Vault', icon: '\u{1F5C2}\uFE0F' },
@@ -39,6 +39,7 @@ const QUICK_ADD = [
 export default function AppLayout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const navigate = useNavigate();
   const user = authService.getCurrentUser();
 
@@ -47,6 +48,7 @@ export default function AppLayout() {
     authService.logout();
     navigate('/login');
   };
+
   const closeDrawer = () => setDrawerOpen(false);
 
   const goQuickAdd = (to) => {
@@ -63,8 +65,24 @@ export default function AppLayout() {
         <span className="mobile-brand">
           <span className="vault-dial" aria-hidden="true"></span> Life Vault
         </span>
-        <div className="mobile-avatar">{user?.name?.[0]?.toUpperCase() || '?'}</div>
+        <div className="mobile-topbar-actions">
+          <button className="mobile-search-btn" onClick={() => setMobileSearchOpen(true)} aria-label="Search">
+            {'\u{1F50D}'}
+          </button>
+          <div className="mobile-avatar">{user?.name?.[0]?.toUpperCase() || '?'}</div>
+        </div>
       </header>
+
+      {mobileSearchOpen && (
+        <div className="mobile-search-overlay">
+          <div className="mobile-search-topbar">
+            <GlobalSearch autoFocus onRequestClose={() => setMobileSearchOpen(false)} />
+            <button className="mobile-search-cancel" onClick={() => setMobileSearchOpen(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {(drawerOpen || addOpen) && (
         <div className="drawer-backdrop" onClick={() => { closeDrawer(); setAddOpen(false); }} />
@@ -115,10 +133,16 @@ export default function AppLayout() {
       </aside>
 
       <main className="main-content">
+        <header className="desktop-topbar">
+          <GlobalSearch />
+          <div className="topbar-user">
+            <span className="topbar-greeting">Hi, {user?.name?.split(' ')[0] || 'there'}</span>
+            <div className="sidebar-avatar">{user?.name?.[0]?.toUpperCase() || '?'}</div>
+          </div>
+        </header>
         <Outlet />
       </main>
 
-      {/* Quick-add sheet, opened from the mobile center FAB */}
       {addOpen && (
         <div className="quick-add-sheet">
           <p className="quick-add-title">Add Something</p>

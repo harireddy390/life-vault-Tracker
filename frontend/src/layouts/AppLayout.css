@@ -163,3 +163,30 @@
   }
   .quick-add-icon { font-size: 20px; }
 }
+.mobile-topbar-actions { display: flex; align-items: center; gap: 14px; }
+.mobile-search-btn { background: none; border: none; color: var(--text-inverse); font-size: 18px; padding: 4px; line-height: 1; }
+
+.mobile-search-overlay { display: none; }
+
+@media (max-width: 768px) {
+  .mobile-search-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: var(--surface);
+    padding: var(--space-4);
+    padding-top: calc(var(--space-4) + env(safe-area-inset-top, 0px));
+  }
+  .mobile-search-topbar { display: flex; align-items: center; gap: var(--space-3); }
+  .mobile-search-cancel {
+    background: none; border: none; color: var(--gold-600);
+    font-weight: 600; font-size: 14px; padding: 8px 4px;
+    flex-shrink: 0; white-space: nowrap;
+  }
+  .mobile-search-overlay .search-dropdown {
+    position: static; border: none; box-shadow: none;
+    margin-top: var(--space-3); max-height: calc(100vh - 100px); padding: 0;
+  }
+  .mobile-search-overlay .search-result { padding: 12px 8px; font-size: 15px; }
+}

@@ -9,7 +9,7 @@ import timerSessionService from '../services/timerSessionService';
 import authService from '../services/authService';
 import Toast from '../components/Toast';
 import Sparkline from '../components/Sparkline';
-import GlobalSearch from '../components/GlobalSearch';
+
 import CustomTimer from '../components/CustomTimer';
 import './Dashboard.css';
 
@@ -114,7 +114,7 @@ export default function Dashboard() {
         <Link to="/planner" className="btn btn-primary">+ Quick Task</Link>
       </div>
 
-      <GlobalSearch />
+      
 
       <div className="stat-row">
         <div className="card stat-card">
