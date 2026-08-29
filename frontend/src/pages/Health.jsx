@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import Toast from '../components/Toast';
 import './Health.css';
 
 const TOTAL_GLASSES = 8;
@@ -10,10 +11,16 @@ export default function Health() {
   const [sleepHrs, setSleepHrs] = useState(Number(localStorage.getItem('lv_sleep_hrs')) || 0);
   const [stepsInput, setStepsInput] = useState('');
   const [sleepInput, setSleepInput] = useState('');
+  const [toast, setToast] = useState(null);
 
   const [postureSecondsLeft, setPostureSecondsLeft] = useState(POSTURE_INTERVAL_MIN * 60);
   const [postureRunning, setPostureRunning] = useState(false);
   const intervalRef = useRef(null);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 2500);
+  };
 
   useEffect(() => {
     if (postureRunning) {
@@ -34,6 +41,7 @@ export default function Health() {
     setSteps(n);
     localStorage.setItem('lv_steps', n);
     setStepsInput('');
+    showToast('Steps logged.');
   };
 
   const saveSleep = (e) => {
@@ -43,6 +51,7 @@ export default function Health() {
     setSleepHrs(n);
     localStorage.setItem('lv_sleep_hrs', n);
     setSleepInput('');
+    showToast('Sleep logged.');
   };
 
   const formatTime = (s) => {
@@ -55,6 +64,8 @@ export default function Health() {
 
   return (
     <div className="health-page">
+      <Toast message={toast?.message} type={toast?.type} />
+
       <div className="page-header">
         <h1>Health</h1>
         <p className="page-subtitle">Small habits, tracked daily. Not medical advice — just your own log.</p>

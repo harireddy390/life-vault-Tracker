@@ -16,8 +16,8 @@
 }
 .calendar-cell:hover { border-color: var(--border-strong); }
 .calendar-cell-empty { background: none; }
-.calendar-cell-today { border-color: rgba(109,107,255,0.5); font-weight: 700; color: var(--text-primary); }
-.calendar-cell-selected { background: linear-gradient(135deg, var(--gold-500), var(--violet-600)); color: #fff; }
+.calendar-cell-today { border-color: color-mix(in srgb, var(--gold-500) 50%, transparent); font-weight: 700; color: var(--text-primary); }
+.calendar-cell-selected { background: linear-gradient(135deg, var(--gold-500), var(--violet-600)); color: var(--text-inverse); }
 
 .calendar-dot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
 .calendar-dot-high { background: var(--success-500); }

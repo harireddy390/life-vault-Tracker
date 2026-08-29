@@ -2,3 +2,12 @@
 .ai-panel { background: linear-gradient(160deg, rgba(109,107,255,0.14), rgba(139,92,246,0.06)); border-color: rgba(109,107,255,0.3); }
 /* replace with: */
 .ai-panel { background: linear-gradient(160deg, rgba(79,70,229,0.08), rgba(37,99,235,0.04)); border-color: rgba(79,70,229,0.2); }
+.habit-summary-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-2); }
+.habit-summary-streak { font-weight: 600; font-size: 14px; }
+.habit-summary-pct { font-weight: 700; font-size: 15px; color: var(--gold-600); }
+
+.puzzle-answer { margin-top: var(--space-2); font-family: monospace; font-weight: 600; color: var(--success-500); }
+.puzzle-reveal-btn { margin-top: var(--space-2); font-size: 12.5px; padding: 6px 12px; }
+
+/* stat-row was laid out for 4 cards; auto-adjusts to whatever count remains */
+.stat-row:has(.stat-card:nth-child(2):last-child) { grid-template-columns: repeat(2, 1fr); }

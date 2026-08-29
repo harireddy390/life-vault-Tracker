@@ -225,7 +225,8 @@ body { line-height: 1.6; }
    slightly different paddings today — this nudges them toward one consistent
    rhythm without renaming any classes */
 .task-row, .tx-row, .contact-row, .doc-row, .doc-mini-row,
-.note-row, .planner-row, .goal-card, .family-card, .timeline-item {
+.note-row, .planner-row, .goal-card, .family-card, .timeline-item,
+.daily-task-row {
   transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
 .task-row:hover, .tx-row:hover, .contact-row:hover, .doc-row:hover {

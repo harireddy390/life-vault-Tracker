@@ -6,11 +6,12 @@ import goalService from '../services/goalService';
 import documentService from '../services/documentService';
 import expenseService from '../services/expenseService';
 import timerSessionService from '../services/timerSessionService';
+import progressService from '../services/progressService';
 import authService from '../services/authService';
 import Toast from '../components/Toast';
 import Sparkline from '../components/Sparkline';
-
 import CustomTimer from '../components/CustomTimer';
+import { toLocalDateString } from '../utils/date';
 import './Dashboard.css';
 
 const PUZZLES = [
@@ -29,24 +30,29 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
   const [timerSessions, setTimerSessions] = useState([]);
+  const [habitDay, setHabitDay] = useState(null);
+  const [habitStats, setHabitStats] = useState(null);
+  const [showPuzzleAnswer, setShowPuzzleAnswer] = useState(false);
 
   const [waterCount, setWaterCount] = useState(Number(localStorage.getItem('lv_water_count')) || 0);
-  const [steps] = useState(Number(localStorage.getItem('lv_steps')) || 0);
-  const [sleepHrs] = useState(Number(localStorage.getItem('lv_sleep_hrs')) || 0);
 
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [t, g, d, e, ts] = await Promise.all([
+      const todayLocal = toLocalDateString();
+      const [t, g, d, e, ts, hd, hs] = await Promise.all([
         taskService.getTasks(),
         goalService.getGoals(),
         documentService.getDocuments(),
         expenseService.getExpenses(),
         timerSessionService.getSessions(),
+        progressService.getDateProgress(todayLocal),
+        progressService.getStats(todayLocal),
       ]);
       setTasks(t); setGoals(g); setDocs(d); setExpenses(e); setTimerSessions(ts);
+      setHabitDay(hd); setHabitStats(hs);
     } catch {
       showToast('Could not load your data. Is the backend running?', 'error');
     } finally {
@@ -57,11 +63,6 @@ export default function Dashboard() {
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 2500);
-  };
-
-  const toggleTask = async (task) => {
-    const updated = await taskService.updateTask(task._id, { completed: !task.completed });
-    setTasks((prev) => prev.map((t) => (t._id === task._id ? updated : t)));
   };
 
   const addWater = (count) => {
@@ -111,26 +112,14 @@ export default function Dashboard() {
           <h1>Good morning, {user?.name?.split(' ')[0] || 'there'} {'\u{1F44B}'}</h1>
           <p className="dash-subtitle">{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
         </div>
-        <Link to="/planner" className="btn btn-primary">+ Quick Task</Link>
+        <Link to="/planner" className="btn btn-primary">+ Quick Habit</Link>
       </div>
 
-      
-
       <div className="stat-row">
-        <div className="card stat-card">
-          <div className="stat-top"><span className="stat-icon">{'\u{1F463}'}</span><span className="stat-label">Steps</span></div>
-          <span className="stat-value">{steps.toLocaleString()}</span>
-          <Sparkline color="var(--gold-500)" seed={steps || 1} />
-        </div>
         <div className="card stat-card">
           <div className="stat-top"><span className="stat-icon">{'\u{1F4A7}'}</span><span className="stat-label">Water</span></div>
           <span className="stat-value">{waterCount}<span className="stat-unit">/{totalGlasses}</span></span>
           <Sparkline color="var(--teal-500)" seed={waterCount + 3} />
-        </div>
-        <div className="card stat-card">
-          <div className="stat-top"><span className="stat-icon">{'\u{1F634}'}</span><span className="stat-label">Sleep</span></div>
-          <span className="stat-value">{sleepHrs || '—'}<span className="stat-unit">{sleepHrs ? 'h' : ''}</span></span>
-          <Sparkline color="var(--violet-500)" seed={sleepHrs + 5 || 2} />
         </div>
         <div className="card stat-card">
           <div className="stat-top"><span className="stat-icon">{'\u{1F3AF}'}</span><span className="stat-label">Deep Hours</span></div>
@@ -146,31 +135,35 @@ export default function Dashboard() {
             <CustomTimer />
           </div>
 
-          <div className="card panel">
-            <p className="panel-eyebrow">Today's Schedule</p>
+          <div className="card panel habit-summary-panel">
+            <p className="panel-eyebrow">Today's Habits</p>
             {loading ? (
               <div className="panel-loading"><span className="spinner"></span> Loading…</div>
-            ) : tasks.length === 0 ? (
-              <div className="empty-state"><div className="empty-icon">{'\u2705'}</div><p>Nothing scheduled — add a task to get started.</p></div>
+            ) : !habitDay || habitDay.summary.totalScheduled === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">{'\u{1F5D3}\uFE0F'}</div>
+                <p>No habits scheduled for today — set one up in Track Progress.</p>
+              </div>
             ) : (
-              <ul className="task-list">
-                {tasks.slice(0, 5).map((task) => (
-                  <li key={task._id} className={`task-row ${task.completed ? 'task-done' : ''}`}>
-                    <label className="task-checkbox">
-                      <input type="checkbox" checked={task.completed} onChange={() => toggleTask(task)} />
-                      <span>{task.text}</span>
-                    </label>
-                    <span className={`badge badge-${task.priority === 'high' ? 'rose' : task.priority === 'medium' ? 'gold' : 'teal'}`}>{task.priority}</span>
-                  </li>
-                ))}
-              </ul>
+              <>
+                <div className="habit-summary-top">
+                  <span className="habit-summary-streak">{'\u{1F525}'} {habitStats?.currentStreak ?? 0}-day streak</span>
+                  <span className="habit-summary-pct">{habitDay.summary.percentage}%</span>
+                </div>
+                <div className="progress-track">
+                  <div className="progress-fill success" style={{ width: `${habitDay.summary.percentage}%` }} />
+                </div>
+                <p className="panel-desc">{habitDay.summary.completedCount} / {habitDay.summary.totalScheduled} completed today</p>
+              </>
             )}
-            <Link to="/planner" className="panel-link">View full planner →</Link>
+            <Link to="/planner" className="panel-link">Open Track Progress →</Link>
           </div>
 
           <div className="card panel">
             <p className="panel-eyebrow">Important Documents</p>
-            {docs.length === 0 ? (
+            {loading ? (
+              <div className="panel-loading"><span className="spinner"></span> Loading…</div>
+            ) : docs.length === 0 ? (
               <div className="empty-state"><div className="empty-icon">{'\u{1F5C2}\uFE0F'}</div><p>Your vault is empty — upload your first document.</p></div>
             ) : (
               <ul className="doc-mini-list">
@@ -196,7 +189,9 @@ export default function Dashboard() {
 
           <div className="card panel">
             <p className="panel-eyebrow">Goals Progress</p>
-            {activeGoals.length === 0 ? (
+            {loading ? (
+              <div className="panel-loading"><span className="spinner"></span> Loading…</div>
+            ) : activeGoals.length === 0 ? (
               <div className="empty-state"><div className="empty-icon">{'\u{1F3AF}'}</div><p>No active goals yet.</p></div>
             ) : (
               <div className="goal-mini-list">
@@ -224,6 +219,13 @@ export default function Dashboard() {
             <p className="panel-eyebrow">The Daily Byte</p>
             <h3 className="puzzle-title">Today's Python Puzzle</h3>
             <code className="puzzle-code">{todaysPuzzle.q}</code>
+            {showPuzzleAnswer ? (
+              <p className="puzzle-answer">{todaysPuzzle.a}</p>
+            ) : (
+              <button className="btn btn-ghost puzzle-reveal-btn" onClick={() => setShowPuzzleAnswer(true)}>
+                Reveal answer
+              </button>
+            )}
           </div>
 
           <div className="card panel text-center">
