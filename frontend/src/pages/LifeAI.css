@@ -1,10 +1,85 @@
-/* find: */
-.insight-card { padding: var(--space-4); display: flex; align-items: flex-start; gap: var(--space-3); background: linear-gradient(160deg, rgba(109,107,255,0.1), rgba(139,92,246,0.04)); }
-/* replace with: */
+.lifeai-page { max-width: 800px; margin: 0 auto; }
+.lifeai-page .page-subtitle { margin-top: var(--space-2); line-height: 1.6; }
+.lifeai-tabs { display: flex; gap: var(--space-2); margin-bottom: var(--space-4); }
+.lifeai-tab {
+  border: 1px solid var(--border-strong); background: var(--surface);
+  color: var(--text-secondary); padding: 8px 18px; border-radius: var(--radius-pill);
+  font-size: 13.5px; font-weight: 600;
+}
+.lifeai-tab-active { background: linear-gradient(135deg, var(--gold-500), var(--violet-600)); color: #fff; border-color: transparent; }
+
+/* ---------- Insights ---------- */
+.insight-list { display: flex; flex-direction: column; gap: var(--space-3); }
 .insight-card { padding: var(--space-4); display: flex; align-items: flex-start; gap: var(--space-3); background: linear-gradient(160deg, rgba(79,70,229,0.06), rgba(37,99,235,0.03)); }
-/* find: */
-.md-inline-code { background: rgba(0,0,0,0.25); padding: 1px 6px; border-radius: 4px; font-size: 12.5px; }
-.md-code-block { background: var(--ink-950); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; overflow-x: auto; font-size: 12.5px; margin: 8px 0; }
-/* replace with: */
+.insight-icon { font-size: 22px; flex-shrink: 0; }
+.insight-body { flex: 1; min-width: 0; }
+.insight-title { font-weight: 700; font-size: 14.5px; margin-bottom: 4px; }
+.insight-text { color: var(--text-secondary); font-size: 13.5px; line-height: 1.5; }
+.insight-action { flex-shrink: 0; padding: 8px 14px; font-size: 13px; }
+
+/* ---------- Chat ---------- */
+.chat-tab {
+  display: flex; flex-direction: column; height: 62vh; min-height: 420px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.chat-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); font-size: 12.5px; color: var(--text-secondary); }
+.chat-context-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.chat-context-toggle input { accent-color: var(--gold-500); }
+.chat-new-btn { background: none; border: 1px solid var(--border-strong); color: var(--text-secondary); padding: 5px 12px; border-radius: var(--radius-pill); font-size: 12px; font-weight: 600; flex-shrink: 0; }
+.chat-new-btn:hover:not(:disabled) { color: var(--text-primary); background: var(--surface-muted); }
+.chat-new-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.chat-messages { flex: 1; overflow-y: auto; padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); }
+.chat-empty { text-align: center; margin: auto; color: var(--text-muted); }
+.chat-empty-title { font-size: 15px; font-weight: 600; margin-bottom: var(--space-3); color: var(--text-secondary); }
+.chat-suggestions { display: flex; flex-direction: column; gap: 8px; max-width: 320px; margin: 0 auto; }
+.chat-suggestion-btn {
+  background: var(--surface-muted); border: 1px solid var(--border); color: var(--text-secondary);
+  padding: 10px 14px; border-radius: var(--radius-md); font-size: 13px; text-align: left;
+}
+.chat-suggestion-btn:hover { border-color: var(--border-strong); color: var(--text-primary); }
+
+.chat-bubble-row { display: flex; }
+.chat-row-user { justify-content: flex-end; }
+.chat-bubble { position: relative; max-width: 80%; padding: 10px 14px; border-radius: var(--radius-md); font-size: 14px; line-height: 1.5; }
+.chat-bubble-ai { background: var(--surface-muted); border: 1px solid var(--border); }
+.chat-bubble-user { background: linear-gradient(135deg, var(--gold-500), var(--violet-600)); color: #fff; }
+.chat-typing { display: flex; align-items: center; gap: 8px; }
+.chat-error { align-self: center; color: var(--rose-600); font-size: 13px; text-align: center; padding: var(--space-2); }
+
+.chat-copy-btn {
+  display: none; position: absolute; bottom: -22px; right: 4px;
+  background: none; border: none; color: var(--text-muted); font-size: 11px; font-weight: 600; cursor: pointer; padding: 2px 4px;
+}
+.chat-bubble-ai:hover .chat-copy-btn, .chat-copy-btn:focus { display: inline-block; }
+
+.chat-input-row { display: flex; gap: var(--space-2); padding: var(--space-3); border-top: 1px solid var(--border); align-items: flex-end; }
+.chat-textarea {
+  flex: 1; resize: none; max-height: 160px; min-height: 40px;
+  font-family: inherit; font-size: 14px; line-height: 1.4;
+  padding: 10px 12px; border-radius: var(--radius-md); border: 1.5px solid var(--border-strong);
+  background: var(--surface); color: var(--text-primary);
+}
+.chat-textarea:focus { border-color: var(--gold-500); outline: none; box-shadow: 0 0 0 3px rgba(79,70,229,0.12); }
+
+/* ---------- Markdown-lite rendering ---------- */
+.md-lite .md-para { margin-bottom: 8px; }
+.md-lite .md-para:last-child { margin-bottom: 0; }
 .md-inline-code { background: rgba(79,70,229,0.08); color: var(--gold-600); padding: 1px 6px; border-radius: 4px; font-size: 12.5px; }
-.md-code-block { background: var(--ink-950); color: var(--text-inverse); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; overflow-x: auto; font-size: 12.5px; margin: 8px 0; }
+.md-list { margin: 8px 0; padding-left: 20px; }
+.md-list li { margin-bottom: 4px; }
+.md-link { color: var(--gold-600); text-decoration: underline; text-underline-offset: 2px; }
+.md-link:hover { color: var(--violet-600); }
+
+.md-code-wrap { margin: 8px 0; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border); }
+.md-code-header { display: flex; align-items: center; justify-content: space-between; background: var(--ink-800); padding: 5px 10px; }
+.md-code-lang { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-inverse-muted); }
+.md-copy-btn { background: none; border: none; color: var(--text-inverse-muted); font-size: 11px; font-weight: 600; cursor: pointer; padding: 2px 6px; }
+.md-copy-btn:hover { color: var(--text-inverse); }
+.md-code-block { margin: 0; border: none; border-radius: 0; background: var(--ink-950); color: var(--text-inverse); padding: 10px 12px; overflow-x: auto; font-size: 12.5px; }
+
+@media (max-width: 600px) {
+  .chat-tab { height: 70vh; }
+  .chat-copy-btn { display: inline-block; position: static; margin-top: 6px; }
+}

@@ -66,6 +66,34 @@ function InsightsTab() {
   );
 }
 
+function ChatBubble({ role, content }) {
+  const [copied, setCopied] = useState(false);
+  const isUser = role === 'user';
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard blocked */
+    }
+  };
+
+  return (
+    <div className={`chat-bubble-row ${isUser ? 'chat-row-user' : ''}`}>
+      <div className={`chat-bubble ${isUser ? 'chat-bubble-user' : 'chat-bubble-ai'}`}>
+        {isUser ? content : <MarkdownLite text={content} />}
+        {!isUser && (
+          <button type="button" className="chat-copy-btn" onClick={handleCopy} aria-label="Copy response">
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ChatTab() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -73,10 +101,17 @@ function ChatTab() {
   const [includeContext, setIncludeContext] = useState(false);
   const [error, setError] = useState('');
   const scrollRef = useRef(null);
+  const textareaRef = useRef(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, sending]);
+
+  useEffect(() => {
+    if (!input && textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+  }, [input]);
 
   const send = async (text) => {
     const content = (text ?? input).trim();
@@ -90,7 +125,11 @@ function ChatTab() {
       const { reply } = await aiService.sendMessage(nextMessages, includeContext);
       setMessages((prev) => [...prev, { role: 'assistant', content: reply }]);
     } catch (err) {
-       setError(err.response?.data?.error || err.response?.data?.message || 'Life AI could not respond. Check that GROQ_API_KEY is set in backend/.env.');
+      setError(
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        'Life AI couldn\u2019t respond just now \u2014 please try again in a moment.'
+      );
     } finally {
       setSending(false);
     }
@@ -98,13 +137,37 @@ function ChatTab() {
 
   const handleSubmit = (e) => { e.preventDefault(); send(); };
 
+  const handleInputChange = (e) => {
+    setInput(e.target.value);
+    const el = textareaRef.current;
+    if (el) {
+      el.style.height = 'auto';
+      el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
+  };
+
+  const startNewChat = () => {
+    setMessages([]);
+    setError('');
+  };
+
   return (
     <div className="chat-tab">
-      <div className="chat-context-toggle">
-        <label>
+      <div className="chat-toolbar">
+        <label className="chat-context-toggle">
           <input type="checkbox" checked={includeContext} onChange={(e) => setIncludeContext(e.target.checked)} />
           Let Life AI see my active tasks and goals for this conversation
         </label>
+        <button type="button" className="chat-new-btn" onClick={startNewChat} disabled={messages.length === 0 && !error}>
+          New chat
+        </button>
       </div>
 
       <div className="chat-messages" ref={scrollRef}>
@@ -119,11 +182,7 @@ function ChatTab() {
           </div>
         )}
         {messages.map((m, i) => (
-          <div key={i} className={`chat-bubble-row ${m.role === 'user' ? 'chat-row-user' : ''}`}>
-            <div className={`chat-bubble ${m.role === 'user' ? 'chat-bubble-user' : 'chat-bubble-ai'}`}>
-              {m.role === 'assistant' ? <MarkdownLite text={m.content} /> : m.content}
-            </div>
-          </div>
+          <ChatBubble key={i} role={m.role} content={m.content} />
         ))}
         {sending && (
           <div className="chat-bubble-row">
@@ -134,12 +193,15 @@ function ChatTab() {
       </div>
 
       <form className="chat-input-row" onSubmit={handleSubmit}>
-        <input
-          className="input"
-          placeholder="Ask anything…"
+        <textarea
+          ref={textareaRef}
+          className="chat-textarea"
+          placeholder="Ask anything… (Enter to send, Shift+Enter for a new line)"
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
           disabled={sending}
+          rows={1}
         />
         <button className="btn btn-primary" type="submit" disabled={sending || !input.trim()}>Send</button>
       </form>

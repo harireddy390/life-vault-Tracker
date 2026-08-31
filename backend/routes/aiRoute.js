@@ -3,6 +3,9 @@ const router = express.Router();
 const { protect } = require('../middleware/authMiddleware');
 const Task = require('../models/tasks');
 const Goal = require('../models/goals');
+const Habit = require('../models/habits');
+const Progress = require('../models/Progress');
+const { formatDateKey, isTaskScheduledOnDate } = require('../services/streakService');
 const { getChatCompletion } = require('../services/aiService');
 
 const BASE_SYSTEM_PROMPT = `You are Life AI, the assistant built into a personal
@@ -15,14 +18,31 @@ question. Match the user's language when practical. You do not have
 real-time web access.`;
 
 async function buildContext(userId) {
-  const [tasks, goals] = await Promise.all([
+  const todayStr = formatDateKey(new Date());
+  const [tasks, goals, habits, todayProgress] = await Promise.all([
     Task.find({ user: userId, completed: false }).limit(10),
     Goal.find({ user: userId, status: 'active' }).limit(10),
+    Habit.find({ user: userId, active: true }).limit(15),
+    Progress.find({ user: userId, date: todayStr }),
   ]);
-  if (tasks.length === 0 && goals.length === 0) return '';
+
+  const scheduledToday = habits.filter((h) => isTaskScheduledOnDate(h, todayStr));
+  const progressByHabit = new Map(todayProgress.map((p) => [p.task.toString(), p.completed]));
+
+  if (tasks.length === 0 && goals.length === 0 && scheduledToday.length === 0) return '';
+
   let block = '\n\nThe user has shared this real data from their Life Vault — only use it if relevant:\n';
+
+  if (scheduledToday.length > 0) {
+    const completedCount = scheduledToday.filter((h) => progressByHabit.get(h._id.toString())).length;
+    block += `\nToday's habits (${completedCount}/${scheduledToday.length} completed so far):\n`;
+    block += scheduledToday.map((h) => {
+      const done = progressByHabit.get(h._id.toString());
+      return `- ${h.title}${h.important ? ' (important)' : ''}: ${done ? 'done' : 'not done yet'}`;
+    }).join('\n') + '\n';
+  }
   if (tasks.length > 0) {
-    block += `\nActive tasks:\n${tasks.map((t) => `- ${t.text} (${t.priority} priority)`).join('\n')}\n`;
+    block += `\nActive one-off tasks:\n${tasks.map((t) => `- ${t.text} (${t.priority} priority)`).join('\n')}\n`;
   }
   if (goals.length > 0) {
     block += `\nActive goals:\n${goals.map((g) => `- ${g.title}: ${g.currentValue}/${g.targetValue}${g.unit}`).join('\n')}\n`;
@@ -30,8 +50,6 @@ async function buildContext(userId) {
   return block;
 }
 
-// Safe, generic messages for the user — never leak provider error bodies,
-// status details, or anything that could hint at the API key.
 function mapErrorToSafeMessage(err) {
   switch (err.code) {
     case 'NO_API_KEY':
@@ -39,6 +57,8 @@ function mapErrorToSafeMessage(err) {
       return 'AI configuration is missing on the server.';
     case 'NETWORK_ERROR':
       return 'Could not reach the AI service. Please try again.';
+    case 'TIMEOUT':
+      return 'The AI took too long to respond. Please try again.';
     case 'PROVIDER_ERROR':
       if (err.status === 401) return 'AI service authentication failed. Please contact the site owner.';
       if (err.status === 429) return 'Your AI request limit may have been reached. Please try again later.';
@@ -51,8 +71,6 @@ function mapErrorToSafeMessage(err) {
   }
 }
 
-// Guards against double-submit (double-click Send, frontend retry loops,
-// etc.) — one in-flight AI request per user at a time.
 const pendingByUser = new Set();
 
 router.post('/chat', protect, async (req, res) => {

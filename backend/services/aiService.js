@@ -1,6 +1,3 @@
-// AI provider adapter. The rest of the app only knows "ask the AI something
-// and get text back" — swapping providers later means editing only this file.
-
 async function getChatCompletion(messages, systemPrompt) {
   if (!process.env.GROQ_API_KEY) {
     const err = new Error('GROQ_API_KEY is not configured');
@@ -13,6 +10,9 @@ async function getChatCompletion(messages, systemPrompt) {
     err.code = 'NO_MODEL';
     throw err;
   }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30_000);
 
   let response;
   try {
@@ -27,17 +27,25 @@ async function getChatCompletion(messages, systemPrompt) {
         max_tokens: 1024,
         messages: [{ role: 'system', content: systemPrompt }, ...messages],
       }),
+      signal: controller.signal,
     });
   } catch (networkErr) {
+    if (networkErr.name === 'AbortError') {
+      console.error('[aiService] Groq request timed out after 30s');
+      const err = new Error('Groq request timed out');
+      err.code = 'TIMEOUT';
+      throw err;
+    }
     console.error('[aiService] Network error reaching Groq:', networkErr.message);
     const err = new Error('Network error reaching Groq');
     err.code = 'NETWORK_ERROR';
     throw err;
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   if (!response.ok) {
     const bodyText = await response.text();
-    // Log full detail server-side only — never sent to the frontend
     console.error('[aiService] Groq API error:', response.status, bodyText);
     const err = new Error('Groq API returned an error');
     err.code = 'PROVIDER_ERROR';
