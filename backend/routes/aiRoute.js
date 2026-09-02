@@ -6,7 +6,7 @@ const Goal = require('../models/goals');
 const Habit = require('../models/habits');
 const Progress = require('../models/Progress');
 const { formatDateKey, isTaskScheduledOnDate } = require('../services/streakService');
-const { getChatCompletion } = require('../services/aiService');
+const { streamChatCompletion } = require('../services/aiService');
 
 const BASE_SYSTEM_PROMPT = `You are Life AI, the assistant built into a personal
 life-management app called Life Vault. Be helpful, clear, friendly, professional,
@@ -62,7 +62,7 @@ function mapErrorToSafeMessage(err) {
     case 'PROVIDER_ERROR':
       if (err.status === 401) return 'AI service authentication failed. Please contact the site owner.';
       if (err.status === 429) return 'Your AI request limit may have been reached. Please try again later.';
-      if (err.status === 404) return 'The configured AI model was not found. Check GROQ_MODEL in backend/.env.';
+      if (err.status === 404) return 'The configured AI model was not found. Check ANTHROPIC_MODEL in backend/.env.';
       return 'AI service is temporarily unavailable. Please try again.';
     case 'BAD_RESPONSE':
       return 'Received an unexpected response from the AI service.';
@@ -75,41 +75,44 @@ const pendingByUser = new Set();
 
 router.post('/chat', protect, async (req, res) => {
   const userId = req.user.id;
+  const { messages, includeContext } = req.body;
+
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ success: false, error: 'Please provide at least one message.' });
+  }
+  if (messages.length > 50) {
+    return res.status(400).json({ success: false, error: 'This conversation is too long for one request.' });
+  }
+  const lastMessage = messages[messages.length - 1];
+  if (!lastMessage?.content || !String(lastMessage.content).trim()) {
+    return res.status(400).json({ success: false, error: 'Message cannot be empty.' });
+  }
+  if (pendingByUser.has(userId)) {
+    return res.status(429).json({ success: false, error: 'Please wait for the current response to finish.' });
+  }
+
+  pendingByUser.add(userId);
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+
+  const sendEvent = (type, data) => {
+    res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
   try {
-    const { messages, includeContext } = req.body;
-
-    if (!Array.isArray(messages) || messages.length === 0) {
-      return res.status(400).json({ success: false, error: 'Please provide at least one message.' });
-    }
-    if (messages.length > 50) {
-      return res.status(400).json({ success: false, error: 'This conversation is too long for one request.' });
-    }
-    const lastMessage = messages[messages.length - 1];
-    if (!lastMessage?.content || !String(lastMessage.content).trim()) {
-      return res.status(400).json({ success: false, error: 'Message cannot be empty.' });
-    }
-
-    if (pendingByUser.has(userId)) {
-      return res.status(429).json({ success: false, error: 'Please wait for the current response to finish.' });
-    }
-    pendingByUser.add(userId);
-
-    let reply;
-    try {
-      const contextBlock = includeContext ? await buildContext(userId) : '';
-      reply = await getChatCompletion(messages, BASE_SYSTEM_PROMPT + contextBlock);
-    } catch (err) {
-      pendingByUser.delete(userId);
-      const status = err.status === 429 ? 429 : 502;
-      return res.status(status).json({ success: false, error: mapErrorToSafeMessage(err) });
-    }
-
+    const contextBlock = includeContext ? await buildContext(userId) : '';
+    await streamChatCompletion(messages, BASE_SYSTEM_PROMPT + contextBlock, (token) => {
+      sendEvent('token', { token });
+    });
+    sendEvent('done', {});
+  } catch (err) {
+    console.error('[aiRoute] Stream error:', err.message);
+    sendEvent('error', { error: mapErrorToSafeMessage(err) });
+  } finally {
     pendingByUser.delete(userId);
-    res.status(200).json({ success: true, reply, usedContext: Boolean(includeContext) });
-  } catch (error) {
-    pendingByUser.delete(userId);
-    console.error('[aiRoute] Unexpected error:', error.message);
-    res.status(500).json({ success: false, error: 'AI service is temporarily unavailable. Please try again.' });
+    res.end();
   }
 });
 

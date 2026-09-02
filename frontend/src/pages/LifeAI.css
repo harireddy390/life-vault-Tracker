@@ -45,7 +45,23 @@
 .chat-bubble { position: relative; max-width: 80%; padding: 10px 14px; border-radius: var(--radius-md); font-size: 14px; line-height: 1.5; }
 .chat-bubble-ai { background: var(--surface-muted); border: 1px solid var(--border); }
 .chat-bubble-user { background: linear-gradient(135deg, var(--gold-500), var(--violet-600)); color: #fff; }
-.chat-typing { display: flex; align-items: center; gap: 8px; }
+.chat-typing-dots { display: inline-flex; gap: 4px; align-items: center; padding: 2px 0; }
+.chat-typing-dots span {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted);
+  animation: chat-typing-bounce 1.2s infinite ease-in-out;
+}
+.chat-typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+.chat-typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes chat-typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+.chat-cursor {
+  display: inline-block; width: 2px; height: 14px; background: var(--text-primary);
+  margin-left: 2px; vertical-align: text-bottom; animation: chat-cursor-blink 0.9s steps(1) infinite;
+}
+@keyframes chat-cursor-blink { 50% { opacity: 0; } }
 .chat-error { align-self: center; color: var(--rose-600); font-size: 13px; text-align: center; padding: var(--space-2); }
 
 .chat-copy-btn {

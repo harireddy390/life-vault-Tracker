@@ -66,9 +66,10 @@ function InsightsTab() {
   );
 }
 
-function ChatBubble({ role, content }) {
+function ChatBubble({ role, content, isStreaming }) {
   const [copied, setCopied] = useState(false);
   const isUser = role === 'user';
+  const showTypingDots = !isUser && isStreaming && content.length === 0;
 
   const handleCopy = async () => {
     try {
@@ -83,8 +84,17 @@ function ChatBubble({ role, content }) {
   return (
     <div className={`chat-bubble-row ${isUser ? 'chat-row-user' : ''}`}>
       <div className={`chat-bubble ${isUser ? 'chat-bubble-user' : 'chat-bubble-ai'}`}>
-        {isUser ? content : <MarkdownLite text={content} />}
-        {!isUser && (
+        {showTypingDots ? (
+          <span className="chat-typing-dots"><span></span><span></span><span></span></span>
+        ) : isUser ? (
+          content
+        ) : (
+          <>
+            <MarkdownLite text={content} />
+            {isStreaming && <span className="chat-cursor" aria-hidden="true" />}
+          </>
+        )}
+        {!isUser && !isStreaming && content && (
           <button type="button" className="chat-copy-btn" onClick={handleCopy} aria-label="Copy response">
             {copied ? 'Copied' : 'Copy'}
           </button>
@@ -118,21 +128,29 @@ function ChatTab() {
     if (!content || sending) return;
     setError('');
     const nextMessages = [...messages, { role: 'user', content }];
-    setMessages(nextMessages);
+    setMessages([...nextMessages, { role: 'assistant', content: '' }]);
     setInput('');
     setSending(true);
-    try {
-      const { reply } = await aiService.sendMessage(nextMessages, includeContext);
-      setMessages((prev) => [...prev, { role: 'assistant', content: reply }]);
-    } catch (err) {
-      setError(
-        err.response?.data?.error ||
-        err.response?.data?.message ||
-        'Life AI couldn\u2019t respond just now \u2014 please try again in a moment.'
-      );
-    } finally {
-      setSending(false);
-    }
+
+    let streamed = '';
+    await aiService.streamMessage(nextMessages, includeContext, {
+      onToken: (token) => {
+        streamed += token;
+        setMessages((prev) => {
+          const updated = [...prev];
+          updated[updated.length - 1] = { role: 'assistant', content: streamed };
+          return updated;
+        });
+      },
+      onDone: () => {
+        setSending(false);
+      },
+      onError: (message) => {
+        setError(message);
+        setSending(false);
+        setMessages((prev) => (prev[prev.length - 1]?.content === '' ? prev.slice(0, -1) : prev));
+      },
+    });
   };
 
   const handleSubmit = (e) => { e.preventDefault(); send(); };
@@ -163,7 +181,7 @@ function ChatTab() {
       <div className="chat-toolbar">
         <label className="chat-context-toggle">
           <input type="checkbox" checked={includeContext} onChange={(e) => setIncludeContext(e.target.checked)} />
-          Let Life AI see my active tasks and goals for this conversation
+          Let Life AI see my active tasks, goals, and today's habits for this conversation
         </label>
         <button type="button" className="chat-new-btn" onClick={startNewChat} disabled={messages.length === 0 && !error}>
           New chat
@@ -182,13 +200,13 @@ function ChatTab() {
           </div>
         )}
         {messages.map((m, i) => (
-          <ChatBubble key={i} role={m.role} content={m.content} />
+          <ChatBubble
+            key={i}
+            role={m.role}
+            content={m.content}
+            isStreaming={sending && i === messages.length - 1 && m.role === 'assistant'}
+          />
         ))}
-        {sending && (
-          <div className="chat-bubble-row">
-            <div className="chat-bubble chat-bubble-ai chat-typing"><span className="spinner"></span> Thinking…</div>
-          </div>
-        )}
         {error && <div className="chat-error">{error}</div>}
       </div>
 
@@ -217,7 +235,7 @@ export default function LifeAI() {
       <div className="page-header">
         <h1>{'\u2728'} Life AI</h1>
         <p className="page-subtitle">
-          Chat is a real conversation with an LLM (Groq), run through your own backend — your API key never touches
+          Chat is a real conversation with Claude, run through your own backend — your API key never touches
           the browser. Insights below are separate: honest, rule-based summaries of your real data, not AI-generated.
         </p>
       </div>
