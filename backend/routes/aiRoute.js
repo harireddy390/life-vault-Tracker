@@ -5,6 +5,7 @@ const Task = require('../models/tasks');
 const Goal = require('../models/goals');
 const Habit = require('../models/habits');
 const Progress = require('../models/Progress');
+const Note = require('../models/notes');
 const { formatDateKey, isTaskScheduledOnDate } = require('../services/streakService');
 const { streamChatCompletion } = require('../services/aiService');
 
@@ -16,6 +17,9 @@ information — only reference Life Vault data if it is explicitly provided to
 you below. If you need to ask something, ask at most one concise clarifying
 question. Match the user's language when practical. You do not have
 real-time web access.`;
+
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const MAX_IMAGE_BASE64_CHARS = 8_000_000; // ~6MB raw, generous headroom under Anthropic's per-image limit
 
 async function buildContext(userId) {
   const todayStr = formatDateKey(new Date());
@@ -50,6 +54,16 @@ async function buildContext(userId) {
   return block;
 }
 
+// Ownership is re-checked server-side rather than trusting whatever the
+// frontend claims is "the attached note" — same rule as every other
+// endpoint in this app: the client sends an id, never the data itself.
+async function buildNoteContext(noteId, userId) {
+  if (!noteId) return '';
+  const note = await Note.findOne({ _id: noteId, user: userId });
+  if (!note) return '';
+  return `\n\nThe user has attached this note from their Life Vault:\nTitle: ${note.title}\n${note.content}\n`;
+}
+
 function mapErrorToSafeMessage(err) {
   switch (err.code) {
     case 'NO_API_KEY':
@@ -75,7 +89,7 @@ const pendingByUser = new Set();
 
 router.post('/chat', protect, async (req, res) => {
   const userId = req.user.id;
-  const { messages, includeContext } = req.body;
+  const { messages, includeContext, noteId } = req.body;
 
   if (!Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ success: false, error: 'Please provide at least one message.' });
@@ -84,8 +98,17 @@ router.post('/chat', protect, async (req, res) => {
     return res.status(400).json({ success: false, error: 'This conversation is too long for one request.' });
   }
   const lastMessage = messages[messages.length - 1];
-  if (!lastMessage?.content || !String(lastMessage.content).trim()) {
+  if ((!lastMessage?.content || !String(lastMessage.content).trim()) && !lastMessage?.image) {
     return res.status(400).json({ success: false, error: 'Message cannot be empty.' });
+  }
+  if (lastMessage?.image) {
+    const { mediaType, data } = lastMessage.image;
+    if (!ALLOWED_IMAGE_TYPES.includes(mediaType)) {
+      return res.status(400).json({ success: false, error: 'Unsupported image type.' });
+    }
+    if (!data || data.length > MAX_IMAGE_BASE64_CHARS) {
+      return res.status(400).json({ success: false, error: 'Image is too large.' });
+    }
   }
   if (pendingByUser.has(userId)) {
     return res.status(429).json({ success: false, error: 'Please wait for the current response to finish.' });
@@ -102,8 +125,11 @@ router.post('/chat', protect, async (req, res) => {
   };
 
   try {
-    const contextBlock = includeContext ? await buildContext(userId) : '';
-    await streamChatCompletion(messages, BASE_SYSTEM_PROMPT + contextBlock, (token) => {
+    const [contextBlock, noteBlock] = await Promise.all([
+      includeContext ? buildContext(userId) : '',
+      buildNoteContext(noteId, userId),
+    ]);
+    await streamChatCompletion(messages, BASE_SYSTEM_PROMPT + contextBlock + noteBlock, (token) => {
       sendEvent('token', { token });
     });
     sendEvent('done', {});

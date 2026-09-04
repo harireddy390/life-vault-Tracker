@@ -1,35 +1,40 @@
-// AI provider adapter — backed by Groq API.
-// Keeps the same robust stream stall detection, error translation, and clean interface.
+// AI provider adapter — backed by Anthropic (Claude). The rest of the app
+// only knows "ask the AI something and get text back, optionally with an
+// image attached" — this is the only file that knows Anthropic's actual
+// wire format.
 
-const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
+const ANTHROPIC_VERSION = '2023-06-01';
 
 function checkConfig() {
-  if (!process.env.GROQ_API_KEY) {
-    const err = new Error('GROQ_API_KEY is not configured');
+  if (!process.env.ANTHROPIC_API_KEY) {
+    const err = new Error('ANTHROPIC_API_KEY is not configured');
     err.code = 'NO_API_KEY';
     throw err;
   }
-  const model = process.env.GROQ_MODEL;
+  const model = process.env.ANTHROPIC_MODEL;
   if (!model) {
-    const err = new Error('GROQ_MODEL is not configured');
+    const err = new Error('ANTHROPIC_MODEL is not configured');
     err.code = 'NO_MODEL';
     throw err;
   }
   return model;
 }
 
-function buildPayload(model, messages, systemPrompt, stream = false) {
-  const formattedMessages = systemPrompt
-    ? [{ role: 'system', content: systemPrompt }, ...messages]
-    : messages;
-
-  return {
-    model,
-    messages: formattedMessages,
-    temperature: 0.7,
-    max_tokens: 1024,
-    stream,
-  };
+// Only a message with an attached image needs the array content-block
+// form — plain text messages stay as a plain string, which Anthropic
+// also accepts.
+function toAnthropicMessages(messages) {
+  return messages.map((m) => {
+    if (!m.image) return { role: m.role, content: m.content };
+    return {
+      role: m.role,
+      content: [
+        { type: 'image', source: { type: 'base64', media_type: m.image.mediaType, data: m.image.data } },
+        { type: 'text', text: m.content || 'What do you see in this image?' },
+      ],
+    };
+  });
 }
 
 async function getChatCompletion(messages, systemPrompt) {
@@ -39,24 +44,25 @@ async function getChatCompletion(messages, systemPrompt) {
 
   let response;
   try {
-    response = await fetch(GROQ_URL, {
+    response = await fetch(ANTHROPIC_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': ANTHROPIC_VERSION,
       },
-      body: JSON.stringify(buildPayload(model, messages, systemPrompt, false)),
+      body: JSON.stringify({ model, max_tokens: 1024, system: systemPrompt, messages: toAnthropicMessages(messages) }),
       signal: controller.signal,
     });
   } catch (networkErr) {
     clearTimeout(timeoutId);
     if (networkErr.name === 'AbortError') {
-      const err = new Error('Groq request timed out');
+      const err = new Error('Claude request timed out');
       err.code = 'TIMEOUT';
       throw err;
     }
-    console.error('[aiService] Network error reaching Groq:', networkErr.message);
-    const err = new Error('Network error reaching Groq');
+    console.error('[aiService] Network error reaching Anthropic:', networkErr.message);
+    const err = new Error('Network error reaching Anthropic');
     err.code = 'NETWORK_ERROR';
     throw err;
   }
@@ -64,18 +70,18 @@ async function getChatCompletion(messages, systemPrompt) {
 
   if (!response.ok) {
     const bodyText = await response.text();
-    console.error('[aiService] Groq API error:', response.status, bodyText);
-    const err = new Error('Groq API returned an error');
+    console.error('[aiService] Anthropic API error:', response.status, bodyText);
+    const err = new Error('Anthropic API returned an error');
     err.code = 'PROVIDER_ERROR';
     err.status = response.status;
     throw err;
   }
 
   const data = await response.json();
-  const reply = data.choices?.[0]?.message?.content;
+  const reply = data.content?.[0]?.text;
   if (!reply) {
-    console.error('[aiService] Unexpected Groq response shape:', JSON.stringify(data).slice(0, 500));
-    const err = new Error('Unexpected response shape from Groq');
+    console.error('[aiService] Unexpected Anthropic response shape:', JSON.stringify(data).slice(0, 500));
+    const err = new Error('Unexpected response shape from Anthropic');
     err.code = 'BAD_RESPONSE';
     throw err;
   }
@@ -89,24 +95,25 @@ async function streamChatCompletion(messages, systemPrompt, onChunk) {
 
   let response;
   try {
-    response = await fetch(GROQ_URL, {
+    response = await fetch(ANTHROPIC_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': ANTHROPIC_VERSION,
       },
-      body: JSON.stringify(buildPayload(model, messages, systemPrompt, true)),
+      body: JSON.stringify({ model, max_tokens: 1024, system: systemPrompt, stream: true, messages: toAnthropicMessages(messages) }),
       signal: controller.signal,
     });
   } catch (networkErr) {
     clearTimeout(connectTimeout);
     if (networkErr.name === 'AbortError') {
-      const err = new Error('Groq request timed out');
+      const err = new Error('Claude request timed out');
       err.code = 'TIMEOUT';
       throw err;
     }
-    console.error('[aiService] Network error reaching Groq:', networkErr.message);
-    const err = new Error('Network error reaching Groq');
+    console.error('[aiService] Network error reaching Anthropic:', networkErr.message);
+    const err = new Error('Network error reaching Anthropic');
     err.code = 'NETWORK_ERROR';
     throw err;
   }
@@ -114,8 +121,8 @@ async function streamChatCompletion(messages, systemPrompt, onChunk) {
 
   if (!response.ok) {
     const bodyText = await response.text();
-    console.error('[aiService] Groq API error:', response.status, bodyText);
-    const err = new Error('Groq API returned an error');
+    console.error('[aiService] Anthropic API error:', response.status, bodyText);
+    const err = new Error('Anthropic API returned an error');
     err.code = 'PROVIDER_ERROR';
     err.status = response.status;
     throw err;
@@ -136,7 +143,7 @@ async function streamChatCompletion(messages, systemPrompt, onChunk) {
         clearTimeout(stallTimer);
         stallTimer = setTimeout(() => {
           reader.cancel().catch(() => {});
-          const err = new Error('Groq stream stalled');
+          const err = new Error('Claude stream stalled');
           err.code = 'TIMEOUT';
           reject(err);
         }, STALL_MS);
@@ -154,19 +161,22 @@ async function streamChatCompletion(messages, systemPrompt, onChunk) {
         if (!trimmed.startsWith('data:')) continue;
         const payload = trimmed.slice(5).trim();
         if (!payload) continue;
-        if (payload === '[DONE]') continue;
 
         let json;
         try {
           json = JSON.parse(payload);
         } catch {
-          continue; // partial or malformed SSE chunk
+          continue;
         }
 
-        const token = json.choices?.[0]?.delta?.content;
-        if (token) {
-          fullReply += token;
-          onChunk(token);
+        if (json.type === 'content_block_delta' && json.delta?.type === 'text_delta') {
+          const token = json.delta.text;
+          if (token) {
+            fullReply += token;
+            onChunk(token);
+          }
+        } else if (json.type === 'error') {
+          streamError = json.error?.message || 'Anthropic stream error';
         }
       }
       if (streamError) break;
@@ -176,13 +186,13 @@ async function streamChatCompletion(messages, systemPrompt, onChunk) {
   }
 
   if (streamError) {
-    console.error('[aiService] Groq stream error event:', streamError);
+    console.error('[aiService] Anthropic stream error event:', streamError);
     const err = new Error(streamError);
     err.code = 'PROVIDER_ERROR';
     throw err;
   }
   if (!fullReply) {
-    const err = new Error('Empty response from Groq stream');
+    const err = new Error('Empty response from Claude stream');
     err.code = 'BAD_RESPONSE';
     throw err;
   }

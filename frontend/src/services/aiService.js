@@ -1,14 +1,10 @@
 import api from '../api/axiosConfig';
 
-// messages: [{ role: 'user' | 'assistant', content: string }]
-
 const sendMessage = async (messages, includeContext) =>
   (await api.post('/ai/chat', { messages, includeContext })).data;
 
 const API_BASE = api.defaults.baseURL || '/api';
 
-// Auth is stored as { token, ... } under 'lifevault_user', not a plain
-// 'token' key — matching exactly what axiosConfig.js's interceptor reads.
 const getToken = () => {
   const stored = localStorage.getItem('lifevault_user');
   if (!stored) return null;
@@ -19,7 +15,7 @@ const getToken = () => {
   }
 };
 
-async function streamMessage(messages, includeContext, { onToken, onDone, onError }) {
+async function streamMessage(messages, includeContext, noteId, { onToken, onDone, onError }) {
   const token = getToken();
   if (!token) {
     onError('You appear to be signed out. Please log in again.');
@@ -34,7 +30,7 @@ async function streamMessage(messages, includeContext, { onToken, onDone, onErro
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ messages, includeContext }),
+      body: JSON.stringify({ messages, includeContext, noteId }),
     });
   } catch {
     onError('Could not reach the server. Please check your connection.');

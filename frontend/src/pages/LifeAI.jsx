@@ -4,6 +4,7 @@ import taskService from '../services/taskService';
 import goalService from '../services/goalService';
 import documentService from '../services/documentService';
 import expenseService from '../services/expenseService';
+import noteService from '../services/noteService';
 import aiService from '../services/aiService';
 import MarkdownLite from '../components/MarkdownLite';
 import './LifeAI.css';
@@ -14,6 +15,18 @@ const SUGGESTED_PROMPTS = [
   'Give me 5 coding practice problems',
   'Summarize my active goals',
 ];
+
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 4MB raw, leaves headroom after base64 inflation
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 function InsightsTab() {
   const [tasks, setTasks] = useState([]);
@@ -104,6 +117,37 @@ function ChatBubble({ role, content, isStreaming }) {
   );
 }
 
+function AttachMenu({ notes, onPickImage, onPickNote, onClose }) {
+  const [showNotes, setShowNotes] = useState(false);
+
+  return (
+    <div className="attach-menu" onMouseLeave={onClose}>
+      {!showNotes ? (
+        <>
+          <button type="button" className="attach-menu-item" onClick={onPickImage}>
+            {'\u{1F5BC}\uFE0F'} Photo
+          </button>
+          <button type="button" className="attach-menu-item" onClick={() => setShowNotes(true)}>
+            {'\u{1F4DD}'} A note
+          </button>
+        </>
+      ) : (
+        <div className="attach-note-list">
+          {notes.length === 0 ? (
+            <p className="attach-note-empty">No notes yet.</p>
+          ) : (
+            notes.slice(0, 20).map((n) => (
+              <button key={n._id} type="button" className="attach-menu-item" onClick={() => onPickNote(n)}>
+                {n.title || 'Untitled note'}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ChatTab() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -112,6 +156,16 @@ function ChatTab() {
   const [error, setError] = useState('');
   const scrollRef = useRef(null);
   const textareaRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  const [notes, setNotes] = useState([]);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [attachedImage, setAttachedImage] = useState(null);
+  const [attachedNote, setAttachedNote] = useState(null);
+
+  useEffect(() => {
+    noteService.getNotes().then(setNotes).catch(() => {});
+  }, []);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -123,17 +177,61 @@ function ChatTab() {
     }
   }, [input]);
 
+  const handleFileChosen = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setError('Please choose a JPEG, PNG, GIF, or WebP image.');
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setError('That image is too large — please use one under 4MB.');
+      return;
+    }
+    setAttachedNote(null);
+    setAttachedImage({ file, previewUrl: URL.createObjectURL(file) });
+    setShowAttachMenu(false);
+  };
+
+  const pickNote = (note) => {
+    setAttachedImage(null);
+    setAttachedNote(note);
+    setShowAttachMenu(false);
+  };
+
+  const clearAttachment = () => {
+    if (attachedImage?.previewUrl) URL.revokeObjectURL(attachedImage.previewUrl);
+    setAttachedImage(null);
+    setAttachedNote(null);
+  };
+
   const send = async (text) => {
     const content = (text ?? input).trim();
-    if (!content || sending) return;
+    if ((!content && !attachedImage) || sending) return;
     setError('');
-    const nextMessages = [...messages, { role: 'user', content }];
+
+    let imagePayload = null;
+    if (attachedImage) {
+      try {
+        const base64 = await fileToBase64(attachedImage.file);
+        imagePayload = { mediaType: attachedImage.file.type, data: base64 };
+      } catch {
+        setError('Could not read that image. Please try again.');
+        return;
+      }
+    }
+
+    const userMessage = { role: 'user', content, ...(imagePayload ? { image: imagePayload } : {}) };
+    const nextMessages = [...messages, userMessage];
     setMessages([...nextMessages, { role: 'assistant', content: '' }]);
     setInput('');
+    const noteId = attachedNote?._id || null;
+    clearAttachment();
     setSending(true);
 
     let streamed = '';
-    await aiService.streamMessage(nextMessages, includeContext, {
+    await aiService.streamMessage(nextMessages, includeContext, noteId, {
       onToken: (token) => {
         streamed += token;
         setMessages((prev) => {
@@ -174,6 +272,7 @@ function ChatTab() {
   const startNewChat = () => {
     setMessages([]);
     setError('');
+    clearAttachment();
   };
 
   return (
@@ -210,7 +309,50 @@ function ChatTab() {
         {error && <div className="chat-error">{error}</div>}
       </div>
 
+      {(attachedImage || attachedNote) && (
+        <div className="chat-attachment-preview">
+          {attachedImage && (
+            <div className="chat-attachment-chip">
+              <img src={attachedImage.previewUrl} alt="Attached" className="chat-attachment-thumb" />
+              <span>Image attached</span>
+              <button type="button" onClick={clearAttachment} aria-label="Remove attachment">&times;</button>
+            </div>
+          )}
+          {attachedNote && (
+            <div className="chat-attachment-chip">
+              <span>{'\u{1F4DD}'} {attachedNote.title || 'Untitled note'}</span>
+              <button type="button" onClick={clearAttachment} aria-label="Remove attachment">&times;</button>
+            </div>
+          )}
+        </div>
+      )}
+
       <form className="chat-input-row" onSubmit={handleSubmit}>
+        <div className="chat-attach-wrap">
+          <button
+            type="button"
+            className="chat-attach-btn"
+            onClick={() => setShowAttachMenu((v) => !v)}
+            aria-label="Attach"
+          >
+            {'\u{1F4CE}'}
+          </button>
+          {showAttachMenu && (
+            <AttachMenu
+              notes={notes}
+              onPickImage={() => fileInputRef.current?.click()}
+              onPickNote={pickNote}
+              onClose={() => setShowAttachMenu(false)}
+            />
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ALLOWED_IMAGE_TYPES.join(',')}
+            className="chat-file-input"
+            onChange={handleFileChosen}
+          />
+        </div>
         <textarea
           ref={textareaRef}
           className="chat-textarea"
@@ -221,7 +363,7 @@ function ChatTab() {
           disabled={sending}
           rows={1}
         />
-        <button className="btn btn-primary" type="submit" disabled={sending || !input.trim()}>Send</button>
+        <button className="btn btn-primary" type="submit" disabled={sending || (!input.trim() && !attachedImage)}>Send</button>
       </form>
     </div>
   );
