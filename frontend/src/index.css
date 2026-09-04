@@ -58,9 +58,9 @@
 
   --sidebar-width: 264px;
   --bottomnav-height: 68px;
-    /* Semantic aliases — name describes the JOB, not a color name that no
+     /* Semantic aliases — name describes the JOB, not a color name that no
      longer matches the actual hue. Reach for these in new code; the
-     --gold-*/--violet-* names stay for backward compatibility. */
+     gold and violet variable names stay for backward compatibility. */
   --accent-primary: var(--gold-500);
   --accent-primary-dark: var(--gold-600);
   --accent-secondary: var(--violet-500);

@@ -9,6 +9,10 @@ export default function CreateHabitModal({ defaultStartDate, onClose, onCreate }
   const [important, setImportant] = useState(false);
   // Default to 'everyday' to match backend schema perfectly
   const [frequency, setFrequency] = useState('everyday'); 
+  const [type, setType] = useState('binary'); // 'binary' or 'quantifiable'
+  const [targetValue, setTargetValue] = useState('');
+  const [targetUnit, setTargetUnit] = useState('');
+  const [category, setCategory] = useState('Personal');
   const [daysOfWeek, setDaysOfWeek] = useState([]);
   
   // Ensure we always have a valid date string
@@ -58,6 +62,10 @@ const handleSubmit = async (e) => {
         description, 
         important, 
         frequency,
+        type,
+        targetValue: type === 'quantifiable' ? Number(targetValue) : null,
+        targetUnit: type === 'quantifiable' ? targetUnit : null,
+        category,
         daysOfWeek: finalDays, 
         startDate, 
         endDate: endDate || null,
@@ -106,6 +114,47 @@ const handleSubmit = async (e) => {
             <option value="weekends">Weekends</option>
             <option value="custom">Custom days</option>
           </select>
+
+        {/* Habit Type Selector */}
+        <div className="habit-form-row mt-4">
+          <label className="habit-field-label text-xs font-semibold text-gray-500 uppercase tracking-wide">Habit Type</label>
+          <select className="input" value={type} onChange={(e) => setType(e.target.value)}>
+            <option value="binary">Binary (checkbox)</option>
+            <option value="quantifiable">Quantifiable</option>
+          </select>
+        </div>
+
+        {type === 'quantifiable' && (
+          <div className="habit-form-row mt-4 grid grid-cols-2 gap-4">
+            <div>
+              <label className="habit-field-label text-xs font-semibold text-gray-500 uppercase tracking-wide">Target Value</label>
+              <input className="input" type="number" value={targetValue} onChange={(e) => setTargetValue(e.target.value)} placeholder="e.g., 30" />
+            </div>
+            <div>
+              <label className="habit-field-label text-xs font-semibold text-gray-500 uppercase tracking-wide">Target Unit</label>
+              <select className="input" value={targetUnit} onChange={(e) => setTargetUnit(e.target.value)}>
+                <option value="">Select unit</option>
+                <option value="times">times</option>
+                <option value="minutes">minutes</option>
+                <option value="hours">hours</option>
+                <option value="pages">pages</option>
+                <option value="%">%</option>
+              </select>
+            </div>
+          </div>
+        )}
+
+        {/* Category Selector */}
+        <div className="habit-form-row mt-4">
+          <label className="habit-field-label text-xs font-semibold text-gray-500 uppercase tracking-wide">Category</label>
+          <select className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
+            <option value="Health">Health</option>
+            <option value="Career">Career</option>
+            <option value="Learning">Learning</option>
+            <option value="Finance">Finance</option>
+            <option value="Personal">Personal</option>
+          </select>
+        </div>
 
           {frequency === 'custom' && (
             <div className="habit-days-row mt-2">

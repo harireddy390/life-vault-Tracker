@@ -1,11 +1,5 @@
 import { useState } from 'react';
 
-// A small, dependency-free markdown renderer covering what an AI reply
-// actually needs: paragraphs, **bold**, *italic*, `inline code`, fenced
-// code blocks (now with a language label + copy button), markdown/bare
-// links, and - / 1. lists. Not a full CommonMark parser, and it doesn't
-// need to be for this use case.
-
 function CodeBlock({ lang, code }) {
   const [copied, setCopied] = useState(false);
 
@@ -15,16 +9,16 @@ function CodeBlock({ lang, code }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      /* clipboard blocked (e.g. insecure context) — button just won't confirm */
+      /* clipboard blocked */
     }
   };
 
   return (
     <div className="md-code-wrap">
       <div className="md-code-header">
-        <span className="md-code-lang">{lang || 'text'}</span>
-        <button type="button" className="md-copy-btn" onClick={handleCopy}>
-          {copied ? 'Copied!' : 'Copy'}
+        <span className="md-code-lang">{lang || 'code'}</span>
+        <button type="button" className="md-copy-btn" onClick={handleCopy} aria-label="Copy code">
+          {copied ? '✓ Copied!' : 'Copy'}
         </button>
       </div>
       <pre className="md-code-block"><code>{code}</code></pre>
@@ -32,10 +26,65 @@ function CodeBlock({ lang, code }) {
   );
 }
 
+function MarkdownTable({ lines }) {
+  if (lines.length < 2) return null;
+
+  // Split cells by |
+  const parseRow = (row) =>
+    row
+      .replace(/^\|/, '')
+      .replace(/\|$/, '')
+      .split('|')
+      .map((c) => c.trim());
+
+  const headerCells = parseRow(lines[0]);
+  const rows = lines.slice(2).map(parseRow);
+
+  return (
+    <div className="md-table-wrap">
+      <table className="md-table">
+        <thead>
+          <tr>
+            {headerCells.map((th, idx) => (
+              <th key={idx}>{th}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, rIdx) => (
+            <tr key={rIdx}>
+              {row.map((cell, cIdx) => (
+                <td key={cIdx}>{cell}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function MarkdownLite({ text }) {
   if (!text) return null;
 
-  const blocks = text.split(/\n{2,}/);
+  // Separate any <think> ... </think> blocks (used by reasoning & vision models)
+  let thinkingContent = null;
+  let isStillThinking = false;
+  let mainText = text;
+
+  if (text.includes('<think>')) {
+    if (text.includes('</think>')) {
+      const parts = text.split('</think>');
+      thinkingContent = parts[0].replace('<think>', '').trim();
+      mainText = parts.slice(1).join('</think>').trim();
+    } else {
+      thinkingContent = text.replace('<think>', '').trim();
+      isStillThinking = true;
+      mainText = '';
+    }
+  }
+
+  const blocks = mainText ? mainText.split(/\n{2,}/) : [];
 
   const renderInline = (line, key) => {
     const parts = [];
@@ -84,30 +133,83 @@ export default function MarkdownLite({ text }) {
 
   return (
     <div className="md-lite">
+      {/* Collapsible reasoning / thought process */}
+      {thinkingContent && (
+        <details className="md-thinking-accordion" open={isStillThinking}>
+          <summary className="md-thinking-summary">
+            <span className="md-thinking-icon">💭</span>
+            <span>{isStillThinking ? 'Thinking & analyzing visual data…' : 'Visual Reasoning'}</span>
+            {isStillThinking && <span className="md-thinking-pulse" />}
+          </summary>
+          <div className="md-thinking-body">
+            <p className="md-thinking-text">{thinkingContent}</p>
+          </div>
+        </details>
+      )}
+
+      {/* Main response blocks */}
       {blocks.map((block, i) => {
-        if (block.startsWith('```')) {
-          const langMatch = block.match(/^```([a-zA-Z0-9]*)\n?/);
+        const trimmed = block.trim();
+
+        // Fenced Code Block
+        if (trimmed.startsWith('```')) {
+          const langMatch = trimmed.match(/^```([a-zA-Z0-9_-]*)\n?/);
           const lang = langMatch ? langMatch[1] : '';
-          const code = block.replace(/^```[a-zA-Z0-9]*\n?/, '').replace(/```$/, '');
+          const code = trimmed.replace(/^```[a-zA-Z0-9_-]*\n?/, '').replace(/```$/, '');
           return <CodeBlock key={i} lang={lang} code={code} />;
         }
-        const lines = block.split('\n');
-        const isList = lines.every((l) => /^(-|\d+\.)\s/.test(l.trim()));
+
+        const lines = trimmed.split('\n');
+
+        // Markdown Table: header line with |, separator line with | --- |
+        if (
+          lines.length >= 2 &&
+          lines[0].includes('|') &&
+          /^\s*\|?\s*[-:]+[-| :]*\|?\s*$/.test(lines[1])
+        ) {
+          return <MarkdownTable key={i} lines={lines} />;
+        }
+
+        // Headings: #, ##, ###
+        if (lines.length === 1 && /^#{1,4}\s/.test(trimmed)) {
+          const level = trimmed.match(/^(#{1,4})\s/)[1].length;
+          const headingText = trimmed.replace(/^#{1,4}\s/, '');
+          const Tag = `h${level + 2}`;
+          return <Tag key={i} className="md-heading">{renderInline(headingText, i)}</Tag>;
+        }
+
+        // Blockquotes
+        if (lines.every((l) => l.trim().startsWith('>'))) {
+          const quoteText = lines.map((l) => l.trim().replace(/^>\s?/, '')).join(' ');
+          return (
+            <blockquote key={i} className="md-quote">
+              {renderInline(quoteText, i)}
+            </blockquote>
+          );
+        }
+
+        // Lists
+        const isList = lines.every((l) => /^(-|\*|\d+\.)\s/.test(l.trim()));
         if (isList) {
           const ordered = /^\d+\./.test(lines[0].trim());
           const Tag = ordered ? 'ol' : 'ul';
           return (
             <Tag key={i} className="md-list">
               {lines.map((l, j) => (
-                <li key={j}>{renderInline(l.replace(/^(-|\d+\.)\s/, ''), `${i}-${j}`)}</li>
+                <li key={j}>{renderInline(l.replace(/^(-|\*|\d+\.)\s/, ''), `${i}-${j}`)}</li>
               ))}
             </Tag>
           );
         }
+
+        // Regular paragraph
         return (
           <p key={i} className="md-para">
             {lines.map((l, j) => (
-              <span key={j}>{renderInline(l, `${i}-${j}`)}{j < lines.length - 1 && <br />}</span>
+              <span key={j}>
+                {renderInline(l, `${i}-${j}`)}
+                {j < lines.length - 1 && <br />}
+              </span>
             ))}
           </p>
         );

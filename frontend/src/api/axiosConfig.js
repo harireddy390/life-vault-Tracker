@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Change this if your backend runs on a different port
-export const API_URL = 'http://localhost:4000/api';
+export const API_URL = 'http://localhost:4003/api';
 
 const api = axios.create({ baseURL: API_URL });
 

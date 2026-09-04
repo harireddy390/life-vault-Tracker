@@ -6,7 +6,11 @@ const habitSchema = new mongoose.Schema(
     title: { type: String, required: [true, 'Please add a title'], trim: true },
     description: { type: String, default: '' },
     important: { type: Boolean, default: false },
-    frequency: { type: String, enum: ['daily', 'weekdays', 'weekends', 'custom'], default: 'daily' },
+    frequency: { type: String, enum: ['daily', 'everyday', 'weekdays', 'weekends', 'custom'], default: 'daily' },
+    type: { type: String, enum: ['binary', 'quantifiable'], default: 'binary' },
+    targetValue: { type: Number, default: null },
+    targetUnit: { type: String, enum: ['times','minutes','hours','pages','%'], default: null },
+    category: { type: String, enum: ['Health','Career','Learning','Finance','Personal'], default: 'Personal' },
     daysOfWeek: { type: [Number], default: [] }, // 0=Sun..6=Sat, only used when frequency === 'custom'
     startDate: { type: String, required: true }, // 'YYYY-MM-DD', local calendar date — not a Date object
     endDate: { type: String, default: null },

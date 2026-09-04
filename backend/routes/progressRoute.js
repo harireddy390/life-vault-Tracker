@@ -46,8 +46,14 @@ router.get('/date/:date', protect, async (req, res) => {
         startDate: h.startDate,
         endDate: h.endDate,
         reminderTime: h.reminderTime || '',
+        type: h.type,
+        targetValue: h.targetValue,
+        targetUnit: h.targetUnit,
+        category: h.category,
         completed: record ? Boolean(record.completed) : false,
         completedAt: record ? record.completedAt : null,
+        amount: record ? record.amount : null,
+        note: record ? record.note : '',
       };
     });
 
@@ -286,17 +292,44 @@ router.post('/toggle', protect, async (req, res) => {
       return res.status(404).json({ message: 'Task not found or unauthorized' });
     }
 
+    // Determine new completed status and amount based on habit type
     let newCompletedStatus = true;
-    if (typeof completed === 'boolean') {
-      newCompletedStatus = completed;
+    let amount = null;
+    let note = '';
+    if (habit.type === 'quantifiable') {
+      // Expect amount and optional note in request body
+      amount = typeof req.body.amount === 'number' ? req.body.amount : null;
+      note = req.body.note || '';
+      // If amount meets or exceeds target, consider completed
+      if (amount !== null && habit.targetValue != null) {
+        newCompletedStatus = amount >= habit.targetValue;
+      } else {
+        // Fallback to toggling based on existing record if amount not provided
+        const existing = await Progress.findOne({ user: req.user.id, task: taskId, date });
+        if (existing) {
+          newCompletedStatus = !existing.completed;
+          amount = existing.amount;
+          note = existing.note;
+        }
+      }
     } else {
-      const existing = await Progress.findOne({ user: req.user.id, task: taskId, date });
-      if (existing) newCompletedStatus = !existing.completed;
+      // Binary habit – preserve existing toggle logic
+      if (typeof completed === 'boolean') {
+        newCompletedStatus = completed;
+      } else {
+        const existing = await Progress.findOne({ user: req.user.id, task: taskId, date });
+        if (existing) newCompletedStatus = !existing.completed;
+      }
     }
 
     const progressRecord = await Progress.findOneAndUpdate(
       { user: req.user.id, task: taskId, date },
-      { completed: newCompletedStatus, completedAt: newCompletedStatus ? new Date() : null },
+      {
+        completed: newCompletedStatus,
+        completedAt: newCompletedStatus ? new Date() : null,
+        amount: amount,
+        note: note
+      },
       { new: true, upsert: true, setDefaultsOnInsert: true }
     );
 

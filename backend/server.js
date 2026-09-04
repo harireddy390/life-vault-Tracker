@@ -27,7 +27,10 @@ app.use('/api/timer-sessions', require('./routes/timerRoute'));
 app.use('/api/habits', require('./routes/habitRoute'));
 app.use('/api/progress', require('./routes/progressRoute'));
 
-app.get('/', (req, res) => {
+app.use('/api/steps', require('./routes/stepsRoute'));
+app.use('/api/subscriptions', require('./routes/subscriptionRoute'));
+
+  app.get('/', (req, res) => {
   res.send('LifeVault API is running.');
 });
 

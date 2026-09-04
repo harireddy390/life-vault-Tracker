@@ -6,6 +6,8 @@ const progressSchema = new mongoose.Schema({
   date: { type: String, required: true, index: true },
   completed: { type: Boolean, default: false },
   completedAt: { type: Date, default: null },
+  amount: { type: Number, default: null },
+  note: { type: String, default: '' },
 }, { timestamps: true });
 
 progressSchema.index({ user: 1, date: 1 });

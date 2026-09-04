@@ -1,15 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import Toast from '../components/Toast';
 import './Health.css';
+import StepCounter from '../components/StepCounter';
 
 const TOTAL_GLASSES = 8;
 const POSTURE_INTERVAL_MIN = 30;
 
 export default function Health() {
   const [waterCount, setWaterCount] = useState(Number(localStorage.getItem('lv_water_count')) || 0);
-  const [steps, setSteps] = useState(Number(localStorage.getItem('lv_steps')) || 0);
   const [sleepHrs, setSleepHrs] = useState(Number(localStorage.getItem('lv_sleep_hrs')) || 0);
-  const [stepsInput, setStepsInput] = useState('');
   const [sleepInput, setSleepInput] = useState('');
   const [toast, setToast] = useState(null);
 
@@ -77,16 +76,6 @@ export default function Health() {
   const addWater = (count) => { setWaterCount(count); localStorage.setItem('lv_water_count', count); };
   const resetWater = () => addWater(0);
 
-  const saveSteps = (e) => {
-    e.preventDefault();
-    if (!stepsInput) return;
-    const n = Number(stepsInput);
-    setSteps(n);
-    localStorage.setItem('lv_steps', n);
-    setStepsInput('');
-    showToast('Steps logged.');
-  };
-
   const saveSleep = (e) => {
     e.preventDefault();
     if (!sleepInput) return;
@@ -144,14 +133,7 @@ export default function Health() {
           </div>
         </div>
 
-        <div className="card health-panel">
-          <p className="panel-eyebrow">Steps</p>
-          <p className="health-log-value">{steps.toLocaleString()}</p>
-          <form className="health-log-form" onSubmit={saveSteps}>
-            <input className="input" type="number" placeholder="Log today's steps" value={stepsInput} onChange={(e) => setStepsInput(e.target.value)} />
-            <button className="btn btn-primary" type="submit">Save</button>
-          </form>
-        </div>
+          <StepCounter target={10000} />
 
         <div className="card health-panel">
           <p className="panel-eyebrow">Sleep</p>

@@ -19,12 +19,9 @@ const documentSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    size: {
-      type: Number,
-      required: true, // bytes
-    },
+    expiresAt: { type: Date, default: null }, // optional expiration date
+    size: { type: Number, required: true }, // bytes,
   },
-  { timestamps: true }
-);
+  { timestamps: true });
 
 module.exports = mongoose.model('Document', documentSchema);
