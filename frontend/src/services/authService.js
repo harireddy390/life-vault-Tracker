@@ -23,4 +23,15 @@ const getCurrentUser = () => {
   return stored ? JSON.parse(stored) : null;
 };
 
-export default { register, login, logout, getCurrentUser };
+const updateStepTarget = async (stepTarget) => {
+  const { data } = await api.put('/auth/me/step-target', { stepTarget });
+  // Also update local storage user object so UI stays in sync
+  const user = getCurrentUser();
+  if (user) {
+    user.stepTarget = data.stepTarget;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+  }
+  return data;
+};
+
+export default { register, login, logout, getCurrentUser, updateStepTarget };

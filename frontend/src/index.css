@@ -1,54 +1,53 @@
 :root {
-  --ink-950: #0b1220;
-  --ink-900: #111a2e;
-  --ink-800: #16213b;
-  --ink-700: #1f2c4a;
-  --ink-600: #2c3b61;
-    
+  --ink-950: #020617;
+  --ink-900: #0f172a;
+  --ink-800: #1e293b;
+  --ink-700: #334155;
+  --ink-600: #475569;
 
-  --bg-app: #f3f5fa;
+  --bg-app: #f8fafc;
   --surface: #ffffff;
-  --surface-muted: #f6f8fc;
+  --surface-muted: #f1f5f9;
   --surface-elevated: #ffffff;
-  --border: #e4e8f2;
-  --border-strong: #d3d9e8;
+  --border: rgba(226, 232, 240, 0.8);
+  --border-strong: #cbd5e1;
 
-  --text-primary: #1b2138;
-  --text-secondary: #5b637d;
-  --text-muted: #8b93ab;
-  --text-inverse: #f2f4fc;
-  --text-inverse-muted: #9aa3c4;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --text-inverse: #f8fafc;
+  --text-inverse-muted: #94a3b8;
 
-  --gold-500: #4f46e5;
-  --gold-600: #4338ca;
-  --gold-100: #eef0ff;
+  --gold-500: #6366f1; /* Shifted to a vibrant indigo */
+  --gold-600: #4f46e5;
+  --gold-100: #e0e7ff;
 
-  --violet-500: #2563eb;
-  --violet-600: #1d4ed8;
-  --violet-100: #e8f0fe;
+  --violet-500: #8b5cf6;
+  --violet-600: #7c3aed;
+  --violet-100: #ede9fe;
 
-  --teal-500: #0891b2;
-  --teal-600: #0e7490;
-  --teal-100: #e0f7fa;
+  --teal-500: #06b6d4;
+  --teal-600: #0891b2;
+  --teal-100: #cffafe;
 
-  --rose-500: #dc2626;
-  --rose-600: #b91c1c;
-  --rose-100: #fde8e8;
+  --rose-500: #f43f5e;
+  --rose-600: #e11d48;
+  --rose-100: #ffe4e6;
 
-  --success-500: #16a34a;
-  --success-100: #e8f8ee;
-  --warning-500: #d97706;
-  --warning-100: #fdf3e2;
+  --success-500: #10b981;
+  --success-100: #d1fae5;
+  --warning-500: #f59e0b;
+  --warning-100: #fef3c7;
 
   --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
   --radius-pill: 999px;
 
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
-  --shadow-md: 0 10px 24px rgba(15, 23, 42, 0.10);
-  --shadow-lg: 0 24px 48px rgba(15, 23, 42, 0.16);
-  --glow-accent: 0 0 0 1px rgba(79, 70, 229, 0.16), 0 10px 24px rgba(79, 70, 229, 0.16);
+  --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -2px rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 10px 25px -5px rgba(0, 0, 0, 0.04), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+  --shadow-lg: 0 25px 50px -12px rgba(0, 0, 0, 0.08);
+  --glow-accent: 0 0 0 1px rgba(99, 102, 241, 0.16), 0 10px 24px rgba(99, 102, 241, 0.16);
 
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
   --space-5: 24px; --space-6: 32px; --space-7: 48px;
@@ -58,9 +57,7 @@
 
   --sidebar-width: 264px;
   --bottomnav-height: 68px;
-     /* Semantic aliases — name describes the JOB, not a color name that no
-     longer matches the actual hue. Reach for these in new code; the
-     gold and violet variable names stay for backward compatibility. */
+  
   --accent-primary: var(--gold-500);
   --accent-primary-dark: var(--gold-600);
   --accent-secondary: var(--violet-500);
@@ -74,13 +71,14 @@ body {
   font-family: var(--font-body);
   background: var(--bg-app);
   background-image:
-    radial-gradient(ellipse 900px 500px at 15% -10%, rgba(79,70,229,0.05), transparent),
-    radial-gradient(ellipse 700px 500px at 100% 0%, rgba(37,99,235,0.04), transparent);
+    radial-gradient(ellipse 900px 600px at -10% -10%, rgba(99,102,241,0.06), transparent),
+    radial-gradient(ellipse 800px 500px at 110% 20%, rgba(139,92,246,0.05), transparent),
+    radial-gradient(ellipse 700px 500px at 50% 110%, rgba(6,182,212,0.04), transparent);
   background-attachment: fixed;
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 600; margin: 0; color: var(--text-primary); }
@@ -158,7 +156,7 @@ textarea:focus-visible, select:focus-visible, [tabindex]:focus-visible {
 .badge-teal { background: var(--teal-100); color: var(--teal-600); }
 .badge-rose { background: var(--rose-100); color: var(--rose-600); }
 
-.empty-state { text-align: center; padding: var(--space-6) var(--space-4); color: var(--text-muted); }
+.empty-state { text-align: center; padding: var(--space-6) var(--space-4); color: var(--text-secondary); }
 .empty-state .empty-icon { font-size: 32px; margin-bottom: var(--space-2); }
 .empty-state p { font-size: 14px; }
 

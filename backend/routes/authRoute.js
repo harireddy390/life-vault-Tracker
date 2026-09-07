@@ -31,6 +31,7 @@ router.post('/register', async (req, res) => {
       _id: user._id,
       name: user.name,
       email: user.email,
+      stepTarget: user.stepTarget,
       token: generateToken(user._id),
     });
   } catch (error) {
@@ -57,6 +58,7 @@ router.post('/login', async (req, res) => {
       _id: user._id,
       name: user.name,
       email: user.email,
+      stepTarget: user.stepTarget,
       token: generateToken(user._id),
     });
   } catch (error) {
@@ -68,6 +70,27 @@ router.post('/login', async (req, res) => {
 // @desc    Get the currently logged-in user's profile
 router.get('/me', protect, async (req, res) => {
   res.status(200).json(req.user);
+});
+
+// @route   PUT /api/auth/me/step-target
+// @desc    Update user's step target
+router.put('/me/step-target', protect, async (req, res) => {
+  try {
+    const { stepTarget } = req.body;
+    if (stepTarget == null || isNaN(stepTarget)) {
+      return res.status(400).json({ message: 'Valid step target is required' });
+    }
+    
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    user.stepTarget = Number(stepTarget);
+    await user.save();
+    
+    res.status(200).json(user);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 });
 
 module.exports = router;

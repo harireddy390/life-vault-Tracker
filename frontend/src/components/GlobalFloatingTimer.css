@@ -1,0 +1,147 @@
+/* ─── Global Floating Timer pill ─── */
+.gft-pill {
+  position: fixed;
+  bottom: 28px;
+  right: 24px;
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(99, 102, 241, 0.12);
+  backdrop-filter: blur(12px);
+  color: #f8fafc;
+  font-family: var(--font-body);
+  font-size: 13px;
+  animation: gft-slide-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: box-shadow 0.2s ease;
+  user-select: none;
+}
+
+.gft-paused {
+  border-color: rgba(245, 158, 11, 0.4);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(245,158,11,0.1);
+}
+
+@keyframes gft-slide-in {
+  from { transform: translateY(20px) scale(0.92); opacity: 0; }
+  to   { transform: translateY(0)     scale(1);    opacity: 1; }
+}
+
+/* Pulse dot */
+.gft-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #6366f1;
+  flex-shrink: 0;
+}
+.gft-paused .gft-dot { background: #f59e0b; }
+
+.gft-dot-pulse {
+  animation: gft-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes gft-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.7); }
+}
+
+/* Mode chip */
+.gft-mode {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #a5b4fc;
+  padding: 2px 7px;
+  background: rgba(99, 102, 241, 0.2);
+  border-radius: 999px;
+}
+.gft-paused .gft-mode { color: #fcd34d; background: rgba(245, 158, 11, 0.15); }
+
+/* Countdown */
+.gft-time {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #f8fafc;
+  min-width: 44px;
+  text-align: center;
+}
+
+/* Linked task */
+.gft-task {
+  font-size: 12px;
+  color: #94a3b8;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Control buttons */
+.gft-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 4px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.gft-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.07);
+  color: #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
+}
+.gft-btn:hover { background: rgba(255, 255, 255, 0.16); color: #fff; }
+
+.gft-btn-stop:hover { background: rgba(239, 68, 68, 0.25); color: #fca5a5; }
+.gft-btn-expand:hover { background: rgba(99, 102, 241, 0.3); color: #c7d2fe; }
+
+/* Done toast (injected by JS outside React tree) */
+.gft-done-toast {
+  position: fixed;
+  bottom: 28px;
+  right: 24px;
+  z-index: 401;
+  background: rgba(15, 23, 42, 0.95);
+  color: #d1fae5;
+  border: 1px solid #34d399;
+  border-radius: 12px;
+  padding: 12px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--font-body);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  animation: gft-slide-in 0.3s ease, gft-fade-out 0.4s 3.1s ease forwards;
+}
+
+@keyframes gft-fade-out {
+  to { opacity: 0; transform: translateY(8px); }
+}
+
+@media (max-width: 640px) {
+  .gft-pill {
+    bottom: calc(var(--bottomnav-height, 68px) + 10px);
+    right: 12px;
+    left: 12px;
+    border-radius: 14px;
+    padding: 10px 14px;
+  }
+  .gft-task { display: none; }
+}

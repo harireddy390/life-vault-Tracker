@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import authService from '../services/authService';
 import GlobalSearch from '../components/GlobalSearch';
+import GlobalFloatingTimer from '../components/GlobalFloatingTimer';
 import './AppLayout.css';
 
 const NAV_ITEMS = [
@@ -136,7 +137,7 @@ export default function AppLayout() {
         <header className="desktop-topbar">
           <GlobalSearch />
           <div className="topbar-user">
-            <span className="topbar-greeting">Hi, {user?.name?.split(' ')[0] || 'there'}</span>
+            <span className="topbar-greeting">Hi, my buddy</span>
             <div className="sidebar-avatar">{user?.name?.[0]?.toUpperCase() || '?'}</div>
           </div>
         </header>
@@ -156,6 +157,9 @@ export default function AppLayout() {
           </div>
         </div>
       )}
+
+      {/* Global floating timer — visible on all routes except /dashboard */}
+      <GlobalFloatingTimer />
 
       <nav className="bottom-nav">
         {MOBILE_TABS.map((item) => (

@@ -72,6 +72,32 @@
 /* ---------- Main content ---------- */
 .main-content { flex: 1; min-width: 0; padding: var(--space-6) var(--space-6) var(--space-7); }
 
+.desktop-topbar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  margin-bottom: var(--space-6);
+}
+
+.desktop-topbar .global-search {
+  grid-column: 2;
+  width: 420px;
+  max-width: 100%;
+}
+
+.topbar-user {
+  grid-column: 3;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.topbar-greeting {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
 .mobile-topbar, .bottom-nav, .drawer-backdrop, .quick-add-sheet { display: none; }
 
 @media (max-width: 1024px) {

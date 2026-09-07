@@ -1,0 +1,208 @@
+/* Status badge — shown while running/paused */
+.ftv2-status-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gold-600);
+  background: var(--gold-100);
+  border-radius: var(--radius-pill);
+  padding: 4px 12px;
+  text-align: center;
+}
+.ftv2-status-paused {
+  color: #92400e;
+  background: #fef3c7;
+}
+.ftv2-linked-name {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.ftv2-card {
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.ftv2-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ftv2-deep-badge {
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--violet-100);
+  color: var(--violet-600);
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+}
+
+/* Completion prompt */
+.ftv2-prompt {
+  background: #d1fae5;
+  border: 1px solid #6ee7b7;
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  font-size: 13.5px;
+  color: #065f46;
+}
+.ftv2-prompt-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+/* Ring */
+.ftv2-ring-wrap {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  align-self: center;
+}
+
+.ftv2-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.ftv2-track {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 7;
+}
+
+.ftv2-progress {
+  fill: none;
+  stroke: var(--gold-500);
+  stroke-width: 7;
+  stroke-linecap: round;
+}
+
+.ftv2-time {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Presets */
+.ftv2-presets {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.ftv2-preset-btn {
+  border: 1px solid var(--border-strong);
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  padding: 5px 13px;
+  border-radius: var(--radius-pill);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.ftv2-preset-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.ftv2-preset-active {
+  background: var(--gold-100);
+  border-color: rgba(99,102,241,0.4);
+  color: var(--gold-600);
+}
+
+/* Controls */
+.ftv2-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  justify-content: center;
+}
+.ftv2-mode-select {
+  width: auto;
+  flex: 1;
+  max-width: 140px;
+  padding: 9px 12px;
+  font-size: 13px;
+  text-transform: capitalize;
+}
+
+.btn-sm { padding: 7px 14px; font-size: 13px; }
+
+/* Task Link */
+.ftv2-task-link { display: flex; flex-direction: column; gap: 4px; }
+.ftv2-task-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.ftv2-task-select { padding: 9px 12px; font-size: 13px; }
+
+/* Audio */
+.ftv2-audio-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-3);
+}
+
+.ftv2-audio-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.ftv2-mute-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  padding: 2px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+.ftv2-mute-btn:hover { color: var(--text-primary); }
+
+.ftv2-volume {
+  flex: 1;
+  height: 3px;
+  accent-color: var(--gold-500);
+  cursor: pointer;
+}
+
+.ftv2-sounds {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ftv2-sound-btn {
+  padding: 4px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.ftv2-sound-btn:hover { border-color: var(--gold-500); color: var(--gold-600); }
+.ftv2-sound-active {
+  background: var(--gold-100);
+  border-color: var(--gold-500);
+  color: var(--gold-600);
+}

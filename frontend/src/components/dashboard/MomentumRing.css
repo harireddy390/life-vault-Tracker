@@ -1,0 +1,101 @@
+.momentum-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  text-align: center;
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+.momentum-ring-wrap {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  flex-shrink: 0;
+}
+
+.momentum-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.momentum-track {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 10;
+}
+
+.momentum-progress {
+  fill: none;
+  stroke: var(--gold-500);
+  stroke-width: 10;
+  stroke-linecap: round;
+}
+
+/* Status-based ring colours */
+.momentum-low  .momentum-progress { stroke: #f59e0b; }
+.momentum-mid  .momentum-progress { stroke: var(--gold-500); }
+.momentum-high .momentum-progress { stroke: #10b981; }
+.momentum-peak .momentum-progress { stroke: url(#peak-grad); }
+
+.momentum-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+}
+
+.momentum-pct {
+  font-family: var(--font-display);
+  font-size: 2.4rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.momentum-pct-sign {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  align-self: flex-start;
+  margin-top: 6px;
+}
+
+.momentum-label {
+  font-size: 14px;
+  font-weight: 700;
+  padding: 4px 14px;
+  border-radius: var(--radius-pill);
+}
+
+.momentum-label.momentum-low  { background: #fef3c7; color: #92400e; }
+.momentum-label.momentum-mid  { background: var(--gold-100); color: var(--gold-600); }
+.momentum-label.momentum-high { background: #d1fae5; color: #065f46; }
+.momentum-label.momentum-peak {
+  background: linear-gradient(135deg, var(--gold-500), var(--violet-500));
+  color: #fff;
+}
+
+.momentum-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+}
+
+.momentum-celebrate {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--violet-600);
+  background: var(--violet-100);
+  border-radius: var(--radius-pill);
+  padding: 4px 12px;
+  animation: celebrate-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes celebrate-pop {
+  from { transform: scale(0.7); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}

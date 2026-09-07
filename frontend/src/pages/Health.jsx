@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Toast from '../components/Toast';
 import './Health.css';
-import StepCounter from '../components/StepCounter';
 
 const TOTAL_GLASSES = 8;
 const POSTURE_INTERVAL_MIN = 30;
@@ -132,8 +131,6 @@ export default function Health() {
             <button className="btn btn-ghost" onClick={() => { setPostureRunning(false); setPostureSecondsLeft(POSTURE_INTERVAL_MIN * 60); }}>Reset</button>
           </div>
         </div>
-
-          <StepCounter target={10000} />
 
         <div className="card health-panel">
           <p className="panel-eyebrow">Sleep</p>
