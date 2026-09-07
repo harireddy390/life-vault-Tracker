@@ -3,92 +3,28 @@ import {
   ShieldCheck,
   Plus,
   Search,
-  AlertTriangle,
   Layers,
   GraduationCap,
   FileBadge,
   HeartPulse,
   Briefcase,
   Lock,
-  X,
   HardDrive,
+  FolderOpen,
+  CheckCircle2,
+  AlertCircle,
   Filter,
 } from 'lucide-react';
 
 import DocumentCard from '../components/vault/DocumentCard';
 import DocumentDetailModal from '../components/vault/DocumentDetailModal';
 import UploadModal from '../components/vault/UploadModal';
-import PinAuthModal from '../components/vault/PinAuthModal';
+import SecurityAuthModal from '../components/vault/SecurityAuthModal';
+import DeleteConfirmModal from '../components/vault/DeleteConfirmModal';
+import StorageUsageBar from '../components/vault/StorageUsageBar';
+import vaultStorage, { BASELINE_QUOTA_BYTES } from '../services/vaultStorage';
+import { hasMasterPassword, encryptBlob, decryptBlob } from '../services/vaultCrypto';
 import './Vault.css';
-
-// ── Clean Deduplicated Seed Data ──
-export const initialDocuments = [
-  {
-    id: 'doc-1',
-    name: 'Executive Health Checkup & Policy.pdf',
-    category: 'Medical & Health',
-    size: '1.7 MB',
-    mimeType: 'application/pdf',
-    uploadDate: '2026-09-02',
-    expiryDate: '2027-05-10',
-    tags: ['Insurance', 'Health', 'Medical Report'],
-    notes: 'Family floater coverage policy number stored. Cashless claims active.',
-    isEncrypted: false,
-    ocrHighlights: ['Policy Holder', 'Cashless Network', 'TPA Card Validated'],
-  },
-  {
-    id: 'doc-2',
-    name: 'University Degree & Attested Transcripts.pdf',
-    category: 'Academics & College',
-    size: '2.4 MB',
-    mimeType: 'application/pdf',
-    uploadDate: '2026-08-23',
-    expiryDate: null,
-    tags: ['Degree', 'Academics', 'Transcript'],
-    notes: 'Official attested engineering degree copy for background checks.',
-    isEncrypted: false,
-    ocrHighlights: ['Dean Signature', 'Degree Conferred', 'Grade Sheet'],
-  },
-  {
-    id: 'doc-3',
-    name: 'National Passport & Travel Document.pdf',
-    category: 'Government IDs',
-    size: '1.2 MB',
-    mimeType: 'application/pdf',
-    uploadDate: '2026-08-18',
-    expiryDate: '2026-09-25', // Expiring in < 30 days
-    tags: ['Passport', 'Identity', 'Travel'],
-    notes: 'Renewal scheduled before international semester departure.',
-    isEncrypted: false,
-    ocrHighlights: ['Republic Authority', 'Date of Issue', 'Immigration Clearance'],
-  },
-  {
-    id: 'doc-4',
-    name: 'Confidential Employment Agreement & NDA.pdf',
-    category: 'Finance & Employment',
-    size: '820 KB',
-    mimeType: 'application/pdf',
-    uploadDate: '2026-08-08',
-    expiryDate: '2028-08-01',
-    tags: ['Compensation', 'Contract', 'Career'],
-    notes: 'Contains base salary terms, IP assignment, and equity lockup timeline.',
-    isEncrypted: true, // Secret Safe Item
-    ocrHighlights: ['Confidential', 'Non-Disclosure', 'Compensation Tier'],
-  },
-  {
-    id: 'doc-5',
-    name: 'Motor Vehicle Registration & Driving License.pdf',
-    category: 'Government IDs',
-    size: '1.1 MB',
-    mimeType: 'application/pdf',
-    uploadDate: '2026-07-10',
-    expiryDate: '2026-08-15', // Expired
-    tags: ['Transport', 'License', 'Identity'],
-    notes: 'Expired last month. Driving renewal test booking pending.',
-    isEncrypted: false,
-    ocrHighlights: ['Transport Department', 'Class of Vehicle', 'Digital Smart Card'],
-  },
-];
 
 const STORAGE_KEY = 'life_vault_documents';
 
@@ -102,75 +38,72 @@ const CATEGORIES = [
 ];
 
 export default function Vault() {
-  // Load clean deduplicated documents from storage
+  // ── 1. Clean Zero-Mock State Initialization ──
   const [documents, setDocuments] = useState(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // Deduplicate by ID
-          const uniqueMap = new Map();
-          parsed.forEach((d) => uniqueMap.set(d.id, d));
-          return Array.from(uniqueMap.values());
+        if (Array.isArray(parsed)) {
+          // Clean wipe of any legacy mock/seed items
+          const cleaned = parsed.filter(
+            (d) => !d.id?.startsWith('doc-seed-') && !['doc-1', 'doc-2', 'doc-3', 'doc-4', 'doc-5'].includes(d.id)
+          );
+          return cleaned;
         }
       }
     } catch (e) {
-      console.error('Failed to parse stored vault documents:', e);
+      console.error('Failed to parse vault documents:', e);
     }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(initialDocuments));
-    return initialDocuments;
+    return [];
   });
 
   // UI state
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState('newest'); // 'newest' | 'oldest' | 'expiry' | 'name' | 'size'
-  const [isBannerDismissed, setIsBannerDismissed] = useState(false);
+  const [sortBy, setSortBy] = useState('newest'); // 'newest' | 'oldest' | 'name' | 'size'
 
-  // Modals (Strictly isolated overlay dialogs)
+  // Toast feedback state
+  const [toast, setToast] = useState(null);
+
+  // Modals state
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [selectedDocForDetail, setSelectedDocForDetail] = useState(null);
-  const [lockedDocForAuth, setLockedDocForAuth] = useState(null);
+  const [docForAuth, setDocForAuth] = useState(null);
+  const [authMode, setAuthMode] = useState('unlock'); // 'unlock' | 'setup'
+  const [pendingUploadCallback, setPendingUploadCallback] = useState(null);
+  const [docToDelete, setDocToDelete] = useState(null);
 
   // Sync to localStorage
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(documents));
     } catch (e) {
-      console.error('Failed to save to localStorage:', e);
+      console.error('Failed to sync documents to localStorage:', e);
     }
   }, [documents]);
 
-  // Calculate used storage for Storage Meter
-  const totalStorageMB = useMemo(() => {
-    let totalMB = 0;
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3200);
+  };
+
+  // Calculate actual storage used (in bytes)
+  const totalStorageBytes = useMemo(() => {
+    let bytes = 0;
     documents.forEach((d) => {
-      const sizeStr = d.size || '1 MB';
-      if (sizeStr.includes('MB')) {
-        totalMB += parseFloat(sizeStr);
-      } else if (sizeStr.includes('KB')) {
-        totalMB += parseFloat(sizeStr) / 1024;
+      if (typeof d.sizeBytes === 'number') {
+        bytes += d.sizeBytes;
+      } else if (d.size?.includes('MB')) {
+        bytes += parseFloat(d.size) * 1024 * 1024;
+      } else if (d.size?.includes('KB')) {
+        bytes += parseFloat(d.size) * 1024;
       }
     });
-    return Math.max(0.5, parseFloat(totalMB.toFixed(1)));
+    return bytes;
   }, [documents]);
 
-  // Expiry Watchdog Calculation
-  const expiryAlertDocs = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    return documents.filter((d) => {
-      if (!d.expiryDate) return false;
-      const exp = new Date(d.expiryDate);
-      exp.setHours(0, 0, 0, 0);
-      const diffDays = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
-      return diffDays <= 30; // Expired or expiring within 30 days
-    });
-  }, [documents]);
-
-  // Filter and Sort
+  // Filter and Sort (Zero Expiry Constraints)
   const filteredDocuments = useMemo(() => {
     return documents
       .filter((doc) => {
@@ -181,7 +114,7 @@ export default function Vault() {
           if (doc.category !== activeCategory) return false;
         }
 
-        // Search Filter
+        // Search Query
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase().trim();
           const matchName = doc.name?.toLowerCase().includes(q);
@@ -204,49 +137,80 @@ export default function Vault() {
           return (a.name || '').localeCompare(b.name || '');
         }
         if (sortBy === 'size') {
-          const parseMB = (s) => (s?.includes('KB') ? parseFloat(s) / 1024 : parseFloat(s) || 0);
-          return parseMB(b.size) - parseMB(a.size);
-        }
-        if (sortBy === 'expiry') {
-          const expA = a.expiryDate ? new Date(a.expiryDate).getTime() : Infinity;
-          const expB = b.expiryDate ? new Date(b.expiryDate).getTime() : Infinity;
-          return expA - expB;
+          const sizeA = a.sizeBytes || 0;
+          const sizeB = b.sizeBytes || 0;
+          return sizeB - sizeA;
         }
         return 0;
       });
   }, [documents, activeCategory, searchQuery, sortBy]);
 
-  // Handlers
+  // Document Card Open Handler
   const handleOpenCard = (doc) => {
     if (doc.isEncrypted) {
-      setLockedDocForAuth(doc);
+      setDocForAuth(doc);
+      setAuthMode('unlock');
     } else {
       setSelectedDocForDetail(doc);
     }
   };
 
-  const handlePinSuccess = (doc) => {
-    setLockedDocForAuth(null);
-    setSelectedDocForDetail(doc);
+  // Auth Success Handler
+  const handleAuthSuccess = (doc, masterPassword) => {
+    if (pendingUploadCallback) {
+      pendingUploadCallback();
+      setPendingUploadCallback(null);
+      showToast('Document securely encrypted & saved.');
+      return;
+    }
+
+    if (doc) {
+      setSelectedDocForDetail(doc);
+      showToast('Document unlocked successfully.');
+    }
   };
 
+  // Save Upload Handler
   const handleSaveUpload = (newDoc) => {
     setDocuments((prev) => [newDoc, ...prev]);
+    showToast(`"${newDoc.name}" added to vault.`);
   };
 
-  const handleDeleteDocument = (id) => {
+  // Trigger Master Password Request during upload if locking
+  const handleRequestMasterPassword = (newDoc, onConfirmed) => {
+    if (!hasMasterPassword()) {
+      setAuthMode('setup');
+      setDocForAuth(newDoc);
+      setPendingUploadCallback(() => onConfirmed);
+    } else {
+      onConfirmed();
+      showToast(`"${newDoc.name}" encrypted with your master password.`);
+    }
+  };
+
+  // Delete Handlers
+  const handleRequestDelete = (doc) => {
+    setSelectedDocForDetail(null);
+    setDocToDelete(doc);
+  };
+
+  const handleConfirmDelete = (id) => {
     setDocuments((prev) => prev.filter((d) => d.id !== id));
+    setDocToDelete(null);
+    showToast('Document permanently removed.', 'destructive');
   };
 
+  // Update Notes Handler
   const handleUpdateNotes = (id, updates) => {
     setDocuments((prev) =>
       prev.map((d) => (d.id === id ? { ...d, ...updates } : d))
     );
+    showToast('Notes updated successfully.');
   };
 
+  // Download Handler
   const handleDownloadFile = (doc) => {
-    // Generate simulated text/svg blob download
-    const content = `LIFE VAULT VERIFIED DOCUMENT\n\nTitle: ${doc.name}\nCategory: ${doc.category}\nSize: ${doc.size}\nUploaded: ${doc.uploadDate}\nSecurity: ${doc.isEncrypted ? 'AES-256 Encrypted' : 'Offline Verified'}\n\nNotes: ${doc.notes || 'None'}`;
+    const content = `LIFE VAULT VERIFIED DOCUMENT\n\nTitle: ${doc.name}\nCategory: ${doc.category}\nSize: ${doc.size}\nUploaded: ${doc.uploadDate}\nSecurity: ${doc.isEncrypted ? 'AES-256 Client-Side Encrypted' : 'Offline Verified'}\n\nNotes: ${doc.notes || 'None'}`;
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -256,14 +220,35 @@ export default function Vault() {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+    showToast(`Downloading "${doc.name}"...`);
   };
 
   return (
     <div className="vault-container">
-      {/* ── 1. Header ── */}
+      {/* ── Toast Feedback Notification ── */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 animate-bounce">
+          <div
+            className={`px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs font-semibold backdrop-blur-md ${
+              toast.type === 'destructive'
+                ? 'bg-rose-50/95 text-rose-800 border border-rose-300 shadow-rose-500/10'
+                : 'bg-emerald-50/95 text-emerald-800 border border-emerald-300 shadow-emerald-500/10'
+            }`}
+          >
+            {toast.type === 'destructive' ? (
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            )}
+            <span>{toast.message}</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── 1. Header Row ── */}
       <div className="vault-header-row">
         <div>
-          <div className="flex items-center gap-2.5 mb-1.5">
+          <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
               Document Vault
             </h1>
@@ -273,85 +258,40 @@ export default function Vault() {
             </span>
           </div>
           <p className="text-sm text-slate-500">
-            Secure, offline-first personal file hub with renewal alerts and instant search.
+            Intelligent, offline-first personal file hub with zero-knowledge encryption and permanent storage.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Compact Storage Meter */}
-          <div className="storage-meter-box">
-            <HardDrive className="w-4 h-4 text-slate-500 shrink-0" />
-            <div className="text-xs">
-              <div className="font-bold text-slate-800">
-                <span>{totalStorageMB} MB</span>
-                <span className="text-slate-400 font-normal"> of 100 MB used</span>
-              </div>
-              <div className="storage-track mt-1">
-                <div
-                  className="storage-fill"
-                  style={{ width: `${Math.min(100, (totalStorageMB / 100) * 100)}%` }}
-                />
-              </div>
-            </div>
+        <div className="flex items-stretch sm:items-center gap-3">
+          {/* Storage Quota Widget (10 GB Baseline) */}
+          <div className="min-w-[240px] sm:min-w-[280px]">
+            <StorageUsageBar totalBytes={totalStorageBytes} />
           </div>
 
-          {/* Upload Button */}
+          {/* Primary Upload Button */}
           <button
             type="button"
             onClick={() => setIsUploadOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white rounded-xl text-xs font-semibold shadow-md shadow-indigo-600/20 transition cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white rounded-2xl text-xs font-semibold shadow-md shadow-indigo-600/20 transition cursor-pointer shrink-0"
           >
             <Plus className="w-4 h-4" />
-            <span>+ Upload Document</span>
+            <span>+ Add Document</span>
           </button>
         </div>
       </div>
 
-      {/* ── 2. Expiry Watchdog Banner (Render ONLY if expiring/expired) ── */}
-      {!isBannerDismissed && expiryAlertDocs.length > 0 && (
-        <div className="expiry-watchdog-banner">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
-              <AlertTriangle className="w-4 h-4 animate-bounce" />
-            </div>
-            <div>
-              <h4 className="text-sm font-bold text-slate-900">
-                Document Expiry Watchdog Alert
-              </h4>
-              <p className="text-xs text-slate-600 mt-0.5">
-                <strong className="text-rose-700 font-semibold">
-                  {expiryAlertDocs.length} document{expiryAlertDocs.length > 1 ? 's' : ''}
-                </strong>{' '}
-                have expired or are expiring within 30 days. Please inspect and renew.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setSortBy('expiry')}
-              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-amber-900 border border-amber-300 hover:bg-amber-50 transition cursor-pointer"
-            >
-              Sort by Imminent Expiry
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsBannerDismissed(true)}
-              className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-white/60 transition cursor-pointer"
-              title="Dismiss alert"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── 3. Category Navigation Tabs ── */}
+      {/* ── 2. Category Navigation Tabs ── */}
       <div className="category-tabs-container">
         {CATEGORIES.map((cat) => {
           const Icon = cat.icon;
           const isActive = activeCategory === cat.id;
+          const count =
+            cat.id === 'All'
+              ? documents.length
+              : cat.id === 'Secret Safe'
+              ? documents.filter((d) => d.isEncrypted).length
+              : documents.filter((d) => d.category === cat.id).length;
+
           return (
             <button
               key={cat.id}
@@ -361,14 +301,21 @@ export default function Vault() {
             >
               <Icon className="w-3.5 h-3.5" />
               <span>{cat.label}</span>
+              <span
+                className={`ml-1 text-[11px] px-1.5 py-0.2 rounded-full font-bold ${
+                  isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                {count}
+              </span>
             </button>
           );
         })}
       </div>
 
-      {/* ── 4. Controls Toolbar ── */}
+      {/* ── 3. Controls Toolbar ── */}
       <div className="vault-controls-bar">
-        {/* Search Input */}
+        {/* Live Search Input */}
         <div className="vault-search-wrapper">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
@@ -401,15 +348,36 @@ export default function Vault() {
           >
             <option value="newest">Newest Uploads</option>
             <option value="oldest">Oldest Uploads</option>
-            <option value="expiry">Sort by Imminent Expiry</option>
             <option value="name">Document Name (A-Z)</option>
             <option value="size">File Size (Largest)</option>
           </select>
         </div>
       </div>
 
-      {/* ── 5. Document Grid (3 Columns) ── */}
-      {filteredDocuments.length === 0 ? (
+      {/* ── 4. Main Content: Empty State vs. 3-Column Document Grid ── */}
+      {documents.length === 0 ? (
+        /* ── Elegant Empty State Placeholder ── */
+        <div className="bg-white rounded-3xl border border-slate-200/90 p-12 sm:p-16 text-center shadow-xs">
+          <div className="w-16 h-16 rounded-3xl bg-indigo-50 border border-indigo-100/90 text-indigo-600 flex items-center justify-center mx-auto mb-4 shadow-sm">
+            <FolderOpen className="w-8 h-8" />
+          </div>
+          <h3 className="text-lg sm:text-xl font-bold text-slate-900">
+            Your Vault is Empty
+          </h3>
+          <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto mt-1.5 leading-relaxed">
+            Securely store your personal IDs, academic certificates, medical reports, and employment contracts offline with zero-knowledge client-side encryption.
+          </p>
+          <button
+            type="button"
+            onClick={() => setIsUploadOpen(true)}
+            className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white rounded-xl text-xs font-semibold shadow-md shadow-indigo-600/20 transition cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Document</span>
+          </button>
+        </div>
+      ) : filteredDocuments.length === 0 ? (
+        /* Filtered Empty State */
         <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-sm">
           <div className="w-12 h-12 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
             <Filter className="w-6 h-6" />
@@ -419,22 +387,22 @@ export default function Vault() {
           </h3>
           <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
             {searchQuery
-              ? `No documents match "${searchQuery}". Try clearing the search or switching categories.`
-              : 'No documents in this category yet. Upload a document to get started.'}
+              ? `No documents match "${searchQuery}". Try a different keyword or category.`
+              : 'No documents in this category yet.'}
           </p>
           <button
             type="button"
             onClick={() => {
               setSearchQuery('');
               setActiveCategory('All');
-              setIsUploadOpen(true);
             }}
-            className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold transition cursor-pointer"
+            className="mt-4 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition cursor-pointer"
           >
-            Upload to Vault
+            Clear Filters
           </button>
         </div>
       ) : (
+        /* Responsive 3-Column Document Grid */
         <div className="vault-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredDocuments.map((doc) => (
             <DocumentCard
@@ -446,31 +414,44 @@ export default function Vault() {
         </div>
       )}
 
-      {/* ── STRICTLY ISOLATED FLOATING MODALS (NEVER RENDER INLINE AT BOTTOM) ── */}
+      {/* ── 5. Strictly Isolated Floating Modals System ── */}
 
-      {/* 1. Document Details & Preview Modal */}
+      {/* Upload Modal (Create) */}
+      <UploadModal
+        isOpen={isUploadOpen}
+        onClose={() => setIsUploadOpen(false)}
+        onSave={handleSaveUpload}
+        onRequestMasterPassword={handleRequestMasterPassword}
+      />
+
+      {/* Document Detail & Preview Modal */}
       <DocumentDetailModal
         isOpen={Boolean(selectedDocForDetail)}
         doc={selectedDocForDetail}
         onClose={() => setSelectedDocForDetail(null)}
         onDownload={handleDownloadFile}
-        onDelete={handleDeleteDocument}
+        onRequestDelete={handleRequestDelete}
         onSaveNotes={handleUpdateNotes}
       />
 
-      {/* 2. Upload Modal */}
-      <UploadModal
-        isOpen={isUploadOpen}
-        onClose={() => setIsUploadOpen(false)}
-        onSave={handleSaveUpload}
+      {/* Security Master Password Auth / Setup Modal */}
+      <SecurityAuthModal
+        isOpen={Boolean(docForAuth)}
+        doc={docForAuth}
+        mode={authMode}
+        onClose={() => {
+          setDocForAuth(null);
+          setPendingUploadCallback(null);
+        }}
+        onSuccess={handleAuthSuccess}
       />
 
-      {/* 3. Secret Safe PIN Modal */}
-      <PinAuthModal
-        isOpen={Boolean(lockedDocForAuth)}
-        doc={lockedDocForAuth}
-        onClose={() => setLockedDocForAuth(null)}
-        onSuccess={handlePinSuccess}
+      {/* Destructive Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={Boolean(docToDelete)}
+        doc={docToDelete}
+        onClose={() => setDocToDelete(null)}
+        onConfirm={handleConfirmDelete}
       />
     </div>
   );

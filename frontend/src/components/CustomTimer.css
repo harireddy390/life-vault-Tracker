@@ -1,28 +1,75 @@
-.custom-timer { display: flex; flex-direction: column; gap: var(--space-3); }
+.custom-timer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
 
-.timer-mode-row { display: grid; grid-template-columns: 1fr 1.4fr; gap: var(--space-2); }
-.timer-mode-select { text-transform: capitalize; }
+.timer-mode-row {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: var(--space-2);
+}
+
+.timer-mode-select {
+  text-transform: capitalize;
+}
 
 .timer-display {
-  font-family: var(--font-display); font-size: 48px; font-weight: 700;
-  text-align: center; color: var(--text-primary); font-variant-numeric: tabular-nums;
+  font-family: var(--font-display);
+  font-size: 48px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
   padding: var(--space-2) 0;
 }
 
-.timer-presets { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
-.timer-preset-btn {
-  border: 1px solid var(--border-strong); background: var(--surface-muted);
-  color: var(--text-secondary); padding: 6px 14px; border-radius: var(--radius-pill);
-  font-size: 12.5px; font-weight: 600;
+.timer-presets {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
 }
-.timer-preset-active { background: var(--gold-100); border-color: rgba(99, 102, 241, 0.4); color: var(--gold-600); }
-.timer-preset-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.timer-custom-form { display: grid; grid-template-columns: 1fr 1fr auto; gap: var(--space-2); }
+.timer-preset-btn {
+  border: 1px solid var(--border-strong);
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  font-size: 12.5px;
+  font-weight: 600;
+}
 
-.timer-controls { display: flex; gap: var(--space-2); justify-content: center; }
+.timer-preset-active {
+  background: var(--gold-100);
+  border-color: rgba(99, 102, 241, 0.4);
+  color: var(--gold-600);
+}
+
+.timer-preset-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.timer-custom-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: var(--space-2);
+}
+
+.timer-controls {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+}
 
 @media (max-width: 420px) {
-  .timer-mode-row { grid-template-columns: 1fr; }
-  .timer-custom-form { grid-template-columns: 1fr 1fr; }
+  .timer-mode-row {
+    grid-template-columns: 1fr;
+  }
+
+  .timer-custom-form {
+    grid-template-columns: 1fr 1fr;
+  }
 }

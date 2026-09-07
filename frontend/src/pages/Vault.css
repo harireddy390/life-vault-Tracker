@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Vault.css — High-Fidelity Styling for Life Vault Document Hub
+   Vault.css — Enterprise-Grade Styling for Life Vault Document Hub
    Guarantees 100% strict modal isolation, responsive card grid, and controls.
    ========================================================================== */
 
@@ -24,7 +24,7 @@
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.75rem;
 }
 
 @media (min-width: 1024px) {
@@ -41,60 +41,11 @@
   gap: 0.35rem;
   font-size: 0.75rem;
   font-weight: 600;
-  padding: 0.2rem 0.65rem;
+  padding: 0.25rem 0.75rem;
   border-radius: 9999px;
   background-color: #eef2ff;
   color: #4f46e5;
   border: 1px solid #c7d2fe;
-}
-
-/* ── Storage Meter ── */
-.storage-meter-box {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 1rem;
-  padding: 0.5rem 1rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-}
-
-.storage-track {
-  width: 110px;
-  height: 8px;
-  background: #f1f5f9;
-  border-radius: 9999px;
-  overflow: hidden;
-  position: relative;
-}
-
-.storage-fill {
-  height: 100%;
-  background: #6366f1;
-  border-radius: 9999px;
-  transition: width 0.4s ease;
-}
-
-/* ── Expiry Watchdog Banner ── */
-.expiry-watchdog-banner {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  background: linear-gradient(135deg, #fffbeb 0%, #fff1f2 100%);
-  border: 1px solid #fde68a;
-  border-radius: 1rem;
-  padding: 1rem 1.25rem;
-  margin-bottom: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-}
-
-@media (min-width: 640px) {
-  .expiry-watchdog-banner {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-  }
 }
 
 /* ── Category Navigation Tabs ── */
@@ -134,7 +85,7 @@
   background: #4f46e5;
   color: #ffffff;
   border-color: #4f46e5;
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.22);
 }
 
 /* ── Controls Toolbar ── */
@@ -165,7 +116,7 @@
 
 .vault-search-input {
   width: 100%;
-  padding: 0.55rem 1rem 0.55rem 2.4rem;
+  padding: 0.6rem 1rem 0.6rem 2.4rem;
   font-size: 0.875rem;
   border-radius: 0.75rem;
   border: 1px solid #e2e8f0;
@@ -182,7 +133,7 @@
 }
 
 .vault-sort-select {
-  padding: 0.55rem 2.2rem 0.55rem 0.85rem;
+  padding: 0.6rem 2.2rem 0.6rem 0.85rem;
   font-size: 0.8125rem;
   font-weight: 600;
   border-radius: 0.75rem;
@@ -201,6 +152,7 @@
 .vault-sort-select:focus {
   border-color: #6366f1;
   background-color: #ffffff;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
 }
 
 /* ── 3-Column Document Grid ── */
@@ -225,9 +177,9 @@
 /* ── Document Card ── */
 .document-card {
   background: #ffffff;
-  border-radius: 1rem;
+  border-radius: 1.25rem;
   border: 1px solid #e2e8f0;
-  padding: 1.25rem;
+  padding: 1.35rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
   display: flex;
@@ -238,7 +190,7 @@
 
 .document-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.07);
   border-color: #cbd5e1;
 }
 
@@ -261,46 +213,6 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-/* Expiry Badges */
-.expiry-badge-expired {
-  background: #fff1f2;
-  color: #be123c;
-  border: 1px solid #fecdd3;
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 0.15rem 0.55rem;
-  border-radius: 9999px;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.expiry-badge-soon {
-  background: #fffbeb;
-  color: #b45309;
-  border: 1px solid #fde68a;
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 0.15rem 0.55rem;
-  border-radius: 9999px;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.expiry-badge-active {
-  background: #f0fdf4;
-  color: #15803d;
-  border: 1px solid #bbf7d0;
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 0.15rem 0.55rem;
-  border-radius: 9999px;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
 }
 
 /* Card Body */
@@ -423,7 +335,7 @@
 }
 
 /* ==========================================================================
-   STRICT ISOLATED MODAL DIALOGS (GUARANTEED FIXED INSET-0)
+   STRICT ISOLATED MODAL DIALOGS
    ========================================================================== */
 
 .modal-backdrop-isolated {
@@ -546,15 +458,4 @@
     border-left: 1px solid #e2e8f0;
     max-height: calc(90vh - 130px);
   }
-}
-
-/* Shake Animation for PIN Modal */
-.animate-shake {
-  animation: pinShake 0.4s ease-in-out;
-}
-
-@keyframes pinShake {
-  0%, 100% { transform: translateX(0); }
-  20%, 60% { transform: translateX(-8px); }
-  40%, 80% { transform: translateX(8px); }
 }

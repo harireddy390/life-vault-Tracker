@@ -1,50 +1,7 @@
 import React from 'react';
-import { Lock, FileText, AlertTriangle, Clock, CheckCircle2 } from 'lucide-react';
+import { Lock, FileText, Shield } from 'lucide-react';
 
 export default function DocumentCard({ doc, onOpen }) {
-  // Expiry Calculation
-  const getExpiryBadge = (expiryDate) => {
-    if (!expiryDate) return null;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const exp = new Date(expiryDate);
-    exp.setHours(0, 0, 0, 0);
-
-    const diffDays = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 0) {
-      return (
-        <span className="expiry-badge-expired bg-rose-50 text-rose-700 border border-rose-200 text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-          <AlertTriangle className="w-3 h-3" />
-          <span>Expired</span>
-        </span>
-      );
-    }
-    if (diffDays <= 30) {
-      return (
-        <span className="expiry-badge-soon bg-amber-50 text-amber-700 border border-amber-200 text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-          <Clock className="w-3 h-3 animate-pulse" />
-          <span>Expires in {diffDays}d</span>
-        </span>
-      );
-    }
-    if (diffDays > 365) {
-      const years = (diffDays / 365).toFixed(1).replace('.0', '');
-      return (
-        <span className="expiry-badge-active bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-          <CheckCircle2 className="w-3 h-3" />
-          <span>Expires in {years}y</span>
-        </span>
-      );
-    }
-    return (
-      <span className="expiry-badge-active bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-        <CheckCircle2 className="w-3 h-3" />
-        <span>Expires in {diffDays}d</span>
-      </span>
-    );
-  };
-
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
     try {
@@ -67,7 +24,18 @@ export default function DocumentCard({ doc, onOpen }) {
           <span className="doc-category-chip bg-slate-100 text-slate-700 text-xs px-2.5 py-1 rounded-full font-medium truncate">
             {doc.category}
           </span>
-          {getExpiryBadge(doc.expiryDate)}
+
+          {doc.isEncrypted ? (
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-900 text-indigo-300 border border-slate-800">
+              <Lock className="w-3 h-3" />
+              <span>AES-256</span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-slate-50 text-slate-500 border border-slate-200/70">
+              <Shield className="w-3 h-3 text-slate-400" />
+              <span>Verified</span>
+            </span>
+          )}
         </div>
 
         {/* Card Body */}
@@ -82,7 +50,10 @@ export default function DocumentCard({ doc, onOpen }) {
             {doc.isEncrypted ? <Lock className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
           </div>
 
-          <h3 className="doc-card-title line-clamp-2 text-slate-900 font-semibold text-base mt-2" title={doc.name}>
+          <h3
+            className="doc-card-title line-clamp-2 text-slate-900 font-semibold text-base mt-2"
+            title={doc.name}
+          >
             {doc.name}
           </h3>
 
@@ -106,7 +77,10 @@ export default function DocumentCard({ doc, onOpen }) {
 
           {/* Notes Snippet */}
           {doc.notes && (
-            <p className="doc-notes-snippet text-xs text-slate-500 truncate mt-2 bg-slate-50 p-2 rounded-lg border border-slate-100" title={doc.notes}>
+            <p
+              className="doc-notes-snippet text-xs text-slate-500 truncate mt-2 bg-slate-50 p-2 rounded-lg border border-slate-100"
+              title={doc.notes}
+            >
               {doc.notes}
             </p>
           )}
@@ -119,7 +93,7 @@ export default function DocumentCard({ doc, onOpen }) {
           <button
             type="button"
             onClick={() => onOpen(doc)}
-            className="btn-card-action encrypted w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs shadow-sm transition"
+            className="btn-card-action encrypted w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs shadow-sm transition cursor-pointer"
           >
             <Lock className="w-3.5 h-3.5 text-indigo-400" />
             <span>Unlock & View</span>
@@ -128,7 +102,7 @@ export default function DocumentCard({ doc, onOpen }) {
           <button
             type="button"
             onClick={() => onOpen(doc)}
-            className="btn-card-action standard w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 border border-slate-300 font-semibold text-xs transition"
+            className="btn-card-action standard w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 border border-slate-300 font-semibold text-xs transition cursor-pointer"
           >
             <FileText className="w-3.5 h-3.5 text-indigo-600" />
             <span>View & Inspect</span>
