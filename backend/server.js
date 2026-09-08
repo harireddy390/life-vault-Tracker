@@ -23,12 +23,14 @@ app.use('/api/memories', require('./routes/memoryRoute'));
 app.use('/api/family', require('./routes/familyRoute'));
 app.use('/api/emergency', require('./routes/emergencyRoute'));
 app.use('/api/ai', require('./routes/aiRoute'));
+app.use('/api/vault', require('./routes/vaultRoute')); // Vault routes
 app.use('/api/timer-sessions', require('./routes/timerRoute'));
 app.use('/api/habits', require('./routes/habitRoute'));
 app.use('/api/progress', require('./routes/progressRoute'));
 
 app.use('/api/steps', require('./routes/stepsRoute'));
 app.use('/api/subscriptions', require('./routes/subscriptionRoute'));
+app.use('/api/health', require('./routes/healthRoute'));
 
   app.get('/', (req, res) => {
   res.send('LifeVault API is running.');

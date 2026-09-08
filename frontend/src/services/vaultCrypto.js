@@ -1,18 +1,21 @@
-/**
- * Client-Side Web Cryptography Helper for Life Vault
- * Uses Web Crypto API (window.crypto.subtle) for AES-GCM 256-bit encryption.
- * Key derivation via PBKDF2 with SHA-256 from a custom user master password.
- * Zero hardcoded or fallback passwords.
- */
+import axios from 'axios';
 
+const API_URL = '/api/vault/auth';
 const PBKDF2_ITERATIONS = 100000;
-const MASTER_HASH_STORAGE_KEY = 'lifevault_master_vault_key_hash';
-const MASTER_SALT_STORAGE_KEY = 'lifevault_master_vault_key_salt';
 
-/**
- * Evaluates password strength based on length, numbers, symbols, and casing.
- * Returns { score, label, color, percent, rules }
- */
+// Store in memory for true zero-knowledge (cleared on reload/close)
+// SessionStorage is an alternative if we want it to survive reloads within the same tab
+let inMemoryMasterPassword = sessionStorage.getItem('vaultMasterPassword') || null;
+
+const getAuthHeaders = () => {
+  // Read token from the same key that authService uses: 'lifevault_user'
+  const stored = localStorage.getItem('lifevault_user');
+  const token = stored ? JSON.parse(stored).token : null;
+  return {
+    Authorization: `Bearer ${token}`,
+  };
+};
+
 export function calculatePasswordStrength(password) {
   if (!password) {
     return {
@@ -58,9 +61,6 @@ export function calculatePasswordStrength(password) {
   return { score: 5, label: 'Very Strong', color: 'emerald', percent: 100, rules };
 }
 
-/**
- * Derives an AES-GCM CryptoKey from a password and salt using PBKDF2
- */
 export async function deriveKey(password, salt) {
   const enc = new TextEncoder();
   const passwordBytes = enc.encode(String(password));
@@ -88,103 +88,63 @@ export async function deriveKey(password, salt) {
   );
 }
 
-/**
- * Checks if a master password has already been established by the user
- */
-export function hasMasterPassword() {
-  return Boolean(
-    localStorage.getItem(MASTER_HASH_STORAGE_KEY) &&
-    localStorage.getItem(MASTER_SALT_STORAGE_KEY)
-  );
+export async function checkHasMasterPassword() {
+  try {
+    const response = await axios.get(`${API_URL}/status`, {
+      headers: getAuthHeaders()
+    });
+    return response.data.hasMasterPassword;
+  } catch (error) {
+    console.error('Error checking master password status:', error);
+    return false;
+  }
 }
 
-/**
- * Sets or updates the user's custom master vault password
- */
+export function hasMasterPasswordInMemory() {
+  return !!inMemoryMasterPassword;
+}
+
+export function getMasterPassword() {
+  return inMemoryMasterPassword;
+}
+
 export async function setMasterPassword(password) {
   if (!password || password.length < 6) {
     throw new Error('Master password must be at least 6 characters.');
   }
 
-  const salt = window.crypto.getRandomValues(new Uint8Array(16));
-  const enc = new TextEncoder();
-  const keyMaterial = await window.crypto.subtle.importKey(
-    'raw',
-    enc.encode(String(password)),
-    { name: 'PBKDF2' },
-    false,
-    ['deriveBits']
-  );
-
-  const derivedBits = await window.crypto.subtle.deriveBits(
-    {
-      name: 'PBKDF2',
-      salt,
-      iterations: PBKDF2_ITERATIONS,
-      hash: 'SHA-256',
-    },
-    keyMaterial,
-    256
-  );
-
-  const hashHex = Array.from(new Uint8Array(derivedBits))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-  const saltHex = Array.from(salt)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-
-  localStorage.setItem(MASTER_HASH_STORAGE_KEY, hashHex);
-  localStorage.setItem(MASTER_SALT_STORAGE_KEY, saltHex);
-  return true;
+  try {
+    await axios.post(`${API_URL}/setup`, { vaultPassword: password }, {
+      headers: getAuthHeaders()
+    });
+    
+    inMemoryMasterPassword = password;
+    sessionStorage.setItem('vaultMasterPassword', password);
+    
+    // Automatically verify to get the token
+    await verifyMasterPassword(password);
+    return true;
+  } catch (error) {
+    throw new Error(error.response?.data?.message || 'Failed to setup master password');
+  }
 }
 
-/**
- * Verifies if entered password matches the stored master password
- */
 export async function verifyMasterPassword(password) {
-  const storedHash = localStorage.getItem(MASTER_HASH_STORAGE_KEY);
-  const storedSaltHex = localStorage.getItem(MASTER_SALT_STORAGE_KEY);
-
-  if (!storedHash || !storedSaltHex) {
+  try {
+    const response = await axios.post(`${API_URL}/verify`, { vaultPassword: password }, {
+      headers: getAuthHeaders()
+    });
+    
+    inMemoryMasterPassword = password;
+    sessionStorage.setItem('vaultMasterPassword', password);
+    sessionStorage.setItem('vaultToken', response.data.vaultToken);
+    
+    return true;
+  } catch (error) {
     return false;
   }
-
-  const saltBytes = new Uint8Array(
-    storedSaltHex.match(/.{1,2}/g).map((byte) => parseInt(byte, 16))
-  );
-
-  const enc = new TextEncoder();
-  const keyMaterial = await window.crypto.subtle.importKey(
-    'raw',
-    enc.encode(String(password)),
-    { name: 'PBKDF2' },
-    false,
-    ['deriveBits']
-  );
-
-  const derivedBits = await window.crypto.subtle.deriveBits(
-    {
-      name: 'PBKDF2',
-      salt: saltBytes,
-      iterations: PBKDF2_ITERATIONS,
-      hash: 'SHA-256',
-    },
-    keyMaterial,
-    256
-  );
-
-  const hashHex = Array.from(new Uint8Array(derivedBits))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-
-  return hashHex === storedHash;
 }
 
-/**
- * Encrypts a Blob using AES-GCM and a user-provided password
- * Returns { encryptedBlob: Blob, salt: number[], iv: number[] }
- */
 export async function encryptBlob(blob, password) {
   const salt = window.crypto.getRandomValues(new Uint8Array(16));
   const iv = window.crypto.getRandomValues(new Uint8Array(12));
@@ -204,9 +164,6 @@ export async function encryptBlob(blob, password) {
   };
 }
 
-/**
- * Decrypts encrypted data using the password, salt, and IV
- */
 export async function decryptBlob(encryptedData, password, salt, iv) {
   let arrayBuffer;
   if (encryptedData instanceof Blob) {
@@ -239,7 +196,9 @@ export async function decryptBlob(encryptedData, password, salt, iv) {
 export default {
   calculatePasswordStrength,
   deriveKey,
-  hasMasterPassword,
+  checkHasMasterPassword,
+  hasMasterPasswordInMemory,
+  getMasterPassword,
   setMasterPassword,
   verifyMasterPassword,
   encryptBlob,

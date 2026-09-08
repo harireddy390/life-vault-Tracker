@@ -19,9 +19,33 @@ const documentSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    expiresAt: { type: Date, default: null }, // optional expiration date
-    size: { type: Number, required: true }, // bytes,
+    size: { type: Number, required: true }, // bytes
+    category: {
+      type: String,
+      default: 'Uncategorized',
+    },
+    isEncrypted: {
+      type: Boolean,
+      default: false,
+    },
+    notes: {
+      type: String,
+      default: '',
+    },
+    tags: {
+      type: [String],
+      default: [],
+    },
+    salt: {
+      type: [Number], // For client-side AES-GCM
+      default: null,
+    },
+    iv: {
+      type: [Number], // For client-side AES-GCM
+      default: null,
+    },
   },
-  { timestamps: true });
+  { timestamps: true }
+);
 
 module.exports = mongoose.model('Document', documentSchema);

@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Filter,
+  Scale,
 } from 'lucide-react';
 
 import DocumentCard from '../components/vault/DocumentCard';
@@ -23,40 +24,27 @@ import SecurityAuthModal from '../components/vault/SecurityAuthModal';
 import DeleteConfirmModal from '../components/vault/DeleteConfirmModal';
 import StorageUsageBar from '../components/vault/StorageUsageBar';
 import vaultStorage, { BASELINE_QUOTA_BYTES } from '../services/vaultStorage';
-import { hasMasterPassword, encryptBlob, decryptBlob } from '../services/vaultCrypto';
+import vaultCrypto from '../services/vaultCrypto';
 import './Vault.css';
 
 const STORAGE_KEY = 'life_vault_documents';
 
 const CATEGORIES = [
   { id: 'All', label: 'All Documents', icon: Layers },
-  { id: 'Academics & College', label: 'Academics & College', icon: GraduationCap },
-  { id: 'Government IDs', label: 'Government IDs', icon: FileBadge },
-  { id: 'Medical & Health', label: 'Medical & Health', icon: HeartPulse },
-  { id: 'Finance & Employment', label: 'Finance & Employment', icon: Briefcase },
+  { id: 'Identity', label: 'Identity', icon: FileBadge },
+  { id: 'Financial', label: 'Financial', icon: Briefcase },
+  { id: 'Health', label: 'Health', icon: HeartPulse },
+  { id: 'Legal', label: 'Legal', icon: Scale },
+  { id: 'Personal', label: 'Personal', icon: GraduationCap },
   { id: 'Secret Safe', label: 'Secret Safe', icon: Lock },
 ];
 
 export default function Vault() {
-  // ── 1. Clean Zero-Mock State Initialization ──
-  const [documents, setDocuments] = useState(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          // Clean wipe of any legacy mock/seed items
-          const cleaned = parsed.filter(
-            (d) => !d.id?.startsWith('doc-seed-') && !['doc-1', 'doc-2', 'doc-3', 'doc-4', 'doc-5'].includes(d.id)
-          );
-          return cleaned;
-        }
-      }
-    } catch (e) {
-      console.error('Failed to parse vault documents:', e);
-    }
-    return [];
-  });
+  // ── 1. State Initialization ──
+  const [documents, setDocuments] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [backendHasMaster, setBackendHasMaster] = useState(false);
+  const [totalStorageBytes, setTotalStorageBytes] = useState(0);
 
   // UI state
   const [activeCategory, setActiveCategory] = useState('All');
@@ -74,34 +62,32 @@ export default function Vault() {
   const [pendingUploadCallback, setPendingUploadCallback] = useState(null);
   const [docToDelete, setDocToDelete] = useState(null);
 
-  // Sync to localStorage
+  // Load from backend
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(documents));
-    } catch (e) {
-      console.error('Failed to sync documents to localStorage:', e);
+    async function loadVault() {
+      setIsLoading(true);
+      try {
+        const [fetchedDocs, usedBytes, hasMaster] = await Promise.all([
+          vaultStorage.getAllDocuments(),
+          vaultStorage.getTotalStorageUsed(),
+          vaultCrypto.checkHasMasterPassword()
+        ]);
+        setDocuments(fetchedDocs);
+        setTotalStorageBytes(usedBytes);
+        setBackendHasMaster(hasMaster);
+      } catch (error) {
+        console.error('Error loading vault data:', error);
+      } finally {
+        setIsLoading(false);
+      }
     }
-  }, [documents]);
+    loadVault();
+  }, []);
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3200);
   };
-
-  // Calculate actual storage used (in bytes)
-  const totalStorageBytes = useMemo(() => {
-    let bytes = 0;
-    documents.forEach((d) => {
-      if (typeof d.sizeBytes === 'number') {
-        bytes += d.sizeBytes;
-      } else if (d.size?.includes('MB')) {
-        bytes += parseFloat(d.size) * 1024 * 1024;
-      } else if (d.size?.includes('KB')) {
-        bytes += parseFloat(d.size) * 1024;
-      }
-    });
-    return bytes;
-  }, [documents]);
 
   // Filter and Sort (Zero Expiry Constraints)
   const filteredDocuments = useMemo(() => {
@@ -111,7 +97,15 @@ export default function Vault() {
         if (activeCategory === 'Secret Safe') {
           if (!doc.isEncrypted) return false;
         } else if (activeCategory !== 'All') {
-          if (doc.category !== activeCategory) return false;
+          const categoryAliases = {
+            'Identity': ['Identity', 'Government IDs'],
+            'Financial': ['Financial', 'Finance & Employment'],
+            'Health': ['Health', 'Medical & Health'],
+            'Legal': ['Legal'],
+            'Personal': ['Personal', 'Academics & College', 'Personal & General', 'General'],
+          };
+          const matches = categoryAliases[activeCategory] || [activeCategory];
+          if (!matches.includes(doc.category)) return false;
         }
 
         // Search Query
@@ -120,8 +114,7 @@ export default function Vault() {
           const matchName = doc.name?.toLowerCase().includes(q);
           const matchNotes = doc.notes?.toLowerCase().includes(q);
           const matchTags = doc.tags?.some((t) => t.toLowerCase().includes(q));
-          const matchOCR = doc.ocrHighlights?.some((h) => h.toLowerCase().includes(q));
-          return matchName || matchNotes || matchTags || matchOCR;
+          return matchName || matchNotes || matchTags;
         }
 
         return true;
@@ -171,20 +164,60 @@ export default function Vault() {
   };
 
   // Save Upload Handler
-  const handleSaveUpload = (newDoc) => {
-    setDocuments((prev) => [newDoc, ...prev]);
-    showToast(`"${newDoc.name}" added to vault.`);
+  const handleSaveUpload = async (newDoc) => {
+    try {
+      showToast(`Securing "${newDoc.name}" to vault...`);
+      const formData = new FormData();
+      formData.append('originalName', newDoc.name);
+      formData.append('category', newDoc.category);
+      formData.append('notes', newDoc.notes || '');
+      formData.append('tags', JSON.stringify(newDoc.tags || []));
+      formData.append('isEncrypted', newDoc.isEncrypted);
+
+      if (newDoc.isEncrypted) {
+        const password = vaultCrypto.getMasterPassword();
+        if (!password) {
+           showToast('Vault password not set in memory', 'destructive');
+           throw new Error('Vault master password not found in memory. Please unlock your vault.');
+        }
+        const { encryptedBlob, salt, iv } = await vaultCrypto.encryptBlob(newDoc.fileBlob, password);
+        // Append encrypted file instead
+        formData.append('file', encryptedBlob, newDoc.name);
+        formData.append('salt', JSON.stringify(salt));
+        formData.append('iv', JSON.stringify(iv));
+      } else {
+        formData.append('file', newDoc.fileBlob);
+      }
+
+      const savedDoc = await vaultStorage.saveDocument(formData);
+      setDocuments((prev) => [savedDoc, ...prev]);
+      
+      const usedBytes = await vaultStorage.getTotalStorageUsed();
+      setTotalStorageBytes(usedBytes);
+      
+      showToast('Document secured to your vault');
+      return savedDoc;
+    } catch (error) {
+      console.error('Upload error:', error);
+      const errMsg = error?.response?.data?.message || error?.message || 'Failed to upload document';
+      showToast(errMsg, 'destructive');
+      throw error;
+    }
   };
 
   // Trigger Master Password Request during upload if locking
   const handleRequestMasterPassword = (newDoc, onConfirmed) => {
-    if (!hasMasterPassword()) {
+    if (!backendHasMaster) {
       setAuthMode('setup');
+      setDocForAuth(newDoc);
+      setPendingUploadCallback(() => onConfirmed);
+    } else if (!vaultCrypto.hasMasterPasswordInMemory()) {
+      setAuthMode('unlock');
       setDocForAuth(newDoc);
       setPendingUploadCallback(() => onConfirmed);
     } else {
       onConfirmed();
-      showToast(`"${newDoc.name}" encrypted with your master password.`);
+      showToast(`"${newDoc?.name || 'Document'}" encrypted with your master password.`);
     }
   };
 
@@ -194,33 +227,64 @@ export default function Vault() {
     setDocToDelete(doc);
   };
 
-  const handleConfirmDelete = (id) => {
-    setDocuments((prev) => prev.filter((d) => d.id !== id));
-    setDocToDelete(null);
-    showToast('Document permanently removed.', 'destructive');
+  const handleConfirmDelete = async (id) => {
+    try {
+      await vaultStorage.deleteDocument(id);
+      setDocuments((prev) => prev.filter((d) => d.id !== id));
+      setDocToDelete(null);
+      const usedBytes = await vaultStorage.getTotalStorageUsed();
+      setTotalStorageBytes(usedBytes);
+      showToast('Document permanently removed.', 'destructive');
+    } catch (error) {
+      showToast('Failed to delete document', 'destructive');
+    }
   };
 
   // Update Notes Handler
-  const handleUpdateNotes = (id, updates) => {
-    setDocuments((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, ...updates } : d))
-    );
-    showToast('Notes updated successfully.');
+  const handleUpdateNotes = async (id, updates) => {
+    try {
+      await vaultStorage.updateDocument(id, updates);
+      setDocuments((prev) =>
+        prev.map((d) => (d.id === id ? { ...d, ...updates } : d))
+      );
+      showToast('Notes updated successfully.');
+    } catch (error) {
+      showToast('Failed to update notes', 'destructive');
+    }
   };
 
   // Download Handler
-  const handleDownloadFile = (doc) => {
-    const content = `LIFE VAULT VERIFIED DOCUMENT\n\nTitle: ${doc.name}\nCategory: ${doc.category}\nSize: ${doc.size}\nUploaded: ${doc.uploadDate}\nSecurity: ${doc.isEncrypted ? 'AES-256 Client-Side Encrypted' : 'Offline Verified'}\n\nNotes: ${doc.notes || 'None'}`;
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = doc.name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    showToast(`Downloading "${doc.name}"...`);
+  const handleDownloadFile = async (doc) => {
+    try {
+      showToast(`Preparing download for "${doc.name}"...`);
+      const blob = await vaultStorage.downloadDocument(doc.id, doc.name);
+      
+      let finalBlob = blob;
+      // If encrypted, decrypt it first
+      if (doc.isEncrypted) {
+        const password = vaultCrypto.getMasterPassword();
+        if (!password) {
+           showToast('Please unlock the vault first', 'destructive');
+           setDocForAuth(doc);
+           setAuthMode('unlock');
+           return;
+        }
+        const decryptedBuffer = await vaultCrypto.decryptBlob(blob, password, doc.salt, doc.iv);
+        finalBlob = new Blob([decryptedBuffer], { type: doc.mimeType || 'application/octet-stream' });
+      }
+
+      const url = URL.createObjectURL(finalBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = doc.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error(error);
+      showToast('Failed to download document', 'destructive');
+    }
   };
 
   return (
@@ -268,14 +332,17 @@ export default function Vault() {
             <StorageUsageBar totalBytes={totalStorageBytes} />
           </div>
 
-          {/* Primary Upload Button */}
+          {/* Primary Upload Button (High-Contrast, Popout Effects, Micro-translation & Hover Glow) */}
           <button
             type="button"
             onClick={() => setIsUploadOpen(true)}
-            className="inline-flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white rounded-2xl text-xs font-semibold shadow-md shadow-indigo-600/20 transition cursor-pointer shrink-0"
+            className="group relative inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 border border-slate-700/80 hover:border-blue-500/60 text-slate-100 rounded-xl text-xs font-semibold shadow-lg shadow-slate-950/40 hover:brightness-110 hover:ring-2 hover:ring-blue-500/40 hover:translate-y-[-1px] active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-blue-500/60 transition-all duration-200 cursor-pointer shrink-0"
+            aria-label="Add Document to Vault"
           >
-            <Plus className="w-4 h-4" />
-            <span>+ Add Document</span>
+            <span className="w-5 h-5 rounded-lg bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 group-hover:text-blue-300 group-hover:scale-110 group-hover:border-blue-400/50 transition-all duration-200">
+              <Plus className="w-3.5 h-3.5" />
+            </span>
+            <span className="tracking-wide">Add Document</span>
           </button>
         </div>
       </div>
@@ -290,7 +357,17 @@ export default function Vault() {
               ? documents.length
               : cat.id === 'Secret Safe'
               ? documents.filter((d) => d.isEncrypted).length
-              : documents.filter((d) => d.category === cat.id).length;
+              : documents.filter((d) => {
+                  const categoryAliases = {
+                    'Identity': ['Identity', 'Government IDs'],
+                    'Financial': ['Financial', 'Finance & Employment'],
+                    'Health': ['Health', 'Medical & Health'],
+                    'Legal': ['Legal'],
+                    'Personal': ['Personal', 'Academics & College', 'Personal & General', 'General'],
+                  };
+                  const matches = categoryAliases[cat.id] || [cat.id];
+                  return matches.includes(d.category);
+                }).length;
 
           return (
             <button
@@ -422,6 +499,7 @@ export default function Vault() {
         onClose={() => setIsUploadOpen(false)}
         onSave={handleSaveUpload}
         onRequestMasterPassword={handleRequestMasterPassword}
+        onToast={showToast}
       />
 
       {/* Document Detail & Preview Modal */}

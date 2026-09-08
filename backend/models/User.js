@@ -20,6 +20,10 @@ const userSchema = new mongoose.Schema(
       minlength: 6,
       select: false, // never return password by default on queries
     },
+    vaultPassword: {
+      type: String,
+      select: false,
+    },
     stepTarget: {
       type: Number,
       default: 10000,
