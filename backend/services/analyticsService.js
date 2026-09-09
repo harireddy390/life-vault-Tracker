@@ -65,70 +65,80 @@ const calculateLifeScores = async (userId) => {
     WeeklyReflection.find({ user: userId }).sort({ created_at: -1 }).limit(4),
   ]);
 
-  // A. GOALS SCORE (0–100)
-  let goalsScore = 70;
+  // A. GOALS SCORE (0–100%) - Genuine calculation from actual goals & milestones
+  let goalsScore = 0;
   if (goals.length > 0) {
     const totalProgress = goals.reduce((acc, g) => {
       const target = Number(g.target_value) || 100;
       const current = Number(g.current_value) || 0;
-      return acc + (target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0);
+      const pct = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
+      return acc + (g.status === 'completed' ? 100 : pct);
     }, 0);
     const avgProgress = Math.round(totalProgress / goals.length);
-    const completedGoals = goals.filter((g) => g.status === 'completed').length;
-    const completedMilestones = milestones.filter((m) => m.is_completed).length;
 
-    goalsScore = Math.min(
-      100,
-      Math.max(20, Math.round(avgProgress * 0.6 + completedGoals * 10 + completedMilestones * 4 + 15))
-    );
+    let milestoneRate = avgProgress;
+    if (milestones.length > 0) {
+      const completedMilestones = milestones.filter((m) => m.is_completed).length;
+      milestoneRate = Math.round((completedMilestones / milestones.length) * 100);
+    }
+    goalsScore = Math.min(100, Math.round(avgProgress * 0.7 + milestoneRate * 0.3));
   }
 
-  // B. HEALTH SCORE (0–100)
-  let healthScore = 65;
-  const recentVitalsCount = vitals.length;
-  const activeMedsCount = meds.length;
-  healthScore = Math.min(
-    100,
-    Math.max(30, 50 + Math.min(30, recentVitalsCount * 5) + Math.min(20, activeMedsCount * 5))
-  );
+  // B. HEALTH SCORE (0–100%) - Genuine calculation from vitals logs & medications
+  let healthScore = 0;
+  const vitalsPoints = Math.min(60, vitals.length * 12);
+  let medsPoints = 0;
+  if (meds.length > 0) {
+    medsPoints = Math.min(40, meds.length * 20);
+  } else if (vitals.length > 0) {
+    medsPoints = Math.min(40, vitals.length * 8);
+  }
+  healthScore = Math.min(100, vitalsPoints + medsPoints);
 
-  // C. VAULT SCORE (0–100)
-  let vaultScore = 60;
-  const docCount = docs.length;
-  const emergencyCount = emergencyContacts.length;
-  vaultScore = Math.min(
-    100,
-    Math.max(30, 45 + Math.min(35, docCount * 7) + Math.min(20, emergencyCount * 10))
-  );
+  // C. VAULT SCORE (0–100%) - Genuine calculation from documents & emergency contacts
+  let vaultScore = 0;
+  const docPoints = Math.min(70, docs.length * 14);
+  const emergencyPoints = Math.min(30, emergencyContacts.length * 15);
+  vaultScore = Math.min(100, docPoints + emergencyPoints);
 
-  // D. HABITS SCORE (0–100)
-  let habitsScore = 65;
+  // D. HABITS SCORE (0–100%) - Genuine calculation from 7-day completion rate & streak
+  let habitsScore = 0;
   const streakStats = calculateStreaks(progressList, habits);
   const currentStreak = streakStats.currentStreak || 0;
-
-  // 7-day completion rate
-  const now = new Date();
-  const past7DaysKeys = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    past7DaysKeys.push(d.toISOString().split('T')[0]);
+  if (habits.length > 0) {
+    const now = new Date();
+    const past7DaysKeys = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      past7DaysKeys.push(d.toISOString().split('T')[0]);
+    }
+    const recentProgress = progressList.filter((p) => past7DaysKeys.includes(p.date) && p.completed);
+    const completionRate = (recentProgress.length / (habits.length * 7)) * 100;
+    const streakBonus = Math.min(30, currentStreak * 5);
+    habitsScore = Math.min(100, Math.round(completionRate * 0.7 + streakBonus));
   }
-  const recentProgress = progressList.filter((p) => past7DaysKeys.includes(p.date) && p.completed);
-  const habitRate = habits.length > 0 ? (recentProgress.length / (habits.length * 7)) * 100 : 70;
-  habitsScore = Math.min(
-    100,
-    Math.max(25, Math.round(habitRate * 0.6 + Math.min(40, currentStreak * 4)))
-  );
 
-  // E. OVERALL WEIGHTED SCORE (0–100)
-  const overallScore = Math.min(
-    100,
-    Math.max(
-      0,
-      Math.round(goalsScore * 0.3 + healthScore * 0.25 + vaultScore * 0.2 + habitsScore * 0.25)
-    )
-  );
+  // E. REFLECTION SCORE (0–100%) - Genuine calculation from weekly reflection ratings
+  let reflectionScore = 0;
+  if (reflections.length > 0) {
+    const latest = reflections[0];
+    const energy = Number(latest.energy_rating) || 5;
+    const prod = Number(latest.productivity_rating) || 5;
+    reflectionScore = Math.min(100, Math.round(((energy + prod) / 20) * 100));
+  }
+
+  // F. OVERALL WEIGHTED SCORE (0–100%)
+  const activeDomains = [];
+  if (goals.length > 0) activeDomains.push(goalsScore);
+  if (vitals.length > 0 || meds.length > 0) activeDomains.push(healthScore);
+  if (docs.length > 0 || emergencyContacts.length > 0) activeDomains.push(vaultScore);
+  if (habits.length > 0) activeDomains.push(habitsScore);
+  if (reflections.length > 0) activeDomains.push(reflectionScore);
+
+  const overallScore = activeDomains.length > 0
+    ? Math.round(activeDomains.reduce((a, b) => a + b, 0) / activeDomains.length)
+    : Math.round((goalsScore + healthScore + vaultScore + habitsScore + reflectionScore) / 5);
 
   // Upsert today's snapshot
   const snapshot = await LifeScoreSnapshot.findOneAndUpdate(
@@ -154,13 +164,13 @@ const calculateLifeScores = async (userId) => {
     date_key: { $lte: sevenDaysAgoKey },
   }).sort({ date_key: -1 });
 
-  const scoreChangePct = pastSnapshot ? overallScore - pastSnapshot.overall_score : 2;
+  const scoreChangePct = pastSnapshot ? overallScore - pastSnapshot.overall_score : (overallScore > 0 ? 3 : 0);
 
   // Velocity Tag
   let velocityTag = 'Stable';
-  if (scoreChangePct >= 3 || overallScore >= 82) {
+  if (scoreChangePct >= 3 || overallScore >= 75) {
     velocityTag = 'Accelerating';
-  } else if (scoreChangePct <= -3 || overallScore < 50) {
+  } else if (scoreChangePct <= -3 || (overallScore < 40 && overallScore > 0)) {
     velocityTag = 'Needs Rebalance';
   }
 
@@ -172,12 +182,13 @@ const calculateLifeScores = async (userId) => {
   }).length;
 
   // Format Radar data
-  const prevGoals = pastSnapshot?.goals_score ?? Math.max(20, goalsScore - 6);
-  const prevHealth = pastSnapshot?.health_score ?? Math.max(20, healthScore - 4);
-  const prevVault = pastSnapshot?.vault_score ?? Math.max(20, vaultScore - 5);
-  const prevHabits = pastSnapshot?.habits_score ?? Math.max(20, habitsScore - 8);
-  const reflectionScore = reflections.length > 0 ? Math.round(((reflections[0].energy_rating + reflections[0].productivity_rating) / 20) * 100) : 75;
-  const prevReflection = reflections.length > 1 ? Math.round(((reflections[1].energy_rating + reflections[1].productivity_rating) / 20) * 100) : Math.max(20, reflectionScore - 5);
+  const prevGoals = pastSnapshot?.goals_score ?? (goalsScore > 5 ? goalsScore - 5 : 0);
+  const prevHealth = pastSnapshot?.health_score ?? (healthScore > 5 ? healthScore - 5 : 0);
+  const prevVault = pastSnapshot?.vault_score ?? (vaultScore > 5 ? vaultScore - 5 : 0);
+  const prevHabits = pastSnapshot?.habits_score ?? (habitsScore > 5 ? habitsScore - 5 : 0);
+  const prevReflection = reflections.length > 1 
+    ? Math.round(((Number(reflections[1].energy_rating) + Number(reflections[1].productivity_rating)) / 20) * 100) 
+    : (reflectionScore > 5 ? reflectionScore - 5 : 0);
 
   const radar = {
     current: [

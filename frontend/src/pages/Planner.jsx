@@ -67,9 +67,14 @@ export default function Planner() {
         progressAnalyticsService.getHeatmapData(),
         progressAnalyticsService.getWeeklyReflections()
       ]);
-      setAnalyticsData(dashRes.data);
-      setHeatmapData(heatRes.data || []);
-      setReflections(refRes.data || []);
+      const dashData = dashRes?.scores ? dashRes : (dashRes?.data || dashRes || {});
+      setAnalyticsData(dashData);
+
+      const heatList = Array.isArray(heatRes?.days) ? heatRes.days : Array.isArray(heatRes) ? heatRes : (heatRes?.data || []);
+      setHeatmapData(heatList);
+
+      const refList = Array.isArray(refRes?.reflections) ? refRes.reflections : Array.isArray(refRes) ? refRes : (refRes?.data || []);
+      setReflections(refList);
     } catch (err) {
       showToast('Could not refresh life analytics.', 'error');
     } finally {

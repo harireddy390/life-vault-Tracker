@@ -97,7 +97,7 @@ export default function DomainDrilldownModal({ isOpen, onClose, domainData }) {
       onClick={onClose}
     >
       <div 
-        className="relative w-full max-w-lg bg-white border border-slate-200/90 rounded-2xl shadow-2xl p-6 sm:p-7 text-slate-900 overflow-hidden"
+        className="relative w-full max-w-lg bg-white border border-slate-200/90 rounded-2xl shadow-2xl p-6 sm:p-7 text-slate-900 overflow-hidden transform transition-all duration-300 animate-in fade-in slide-in-from-bottom-5 zoom-in-95 ease-out"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
