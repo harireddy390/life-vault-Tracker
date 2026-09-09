@@ -3,6 +3,9 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const Habit = require('../models/habits');
 const Progress = require('../models/Progress');
+const WeeklyReflection = require('../models/WeeklyReflection');
+const LifeScoreSnapshot = require('../models/LifeScoreSnapshot');
+const ActivityLog = require('../models/ActivityLog');
 const { protect } = require('../middleware/authMiddleware');
 const {
   formatDateKey,
@@ -12,6 +15,13 @@ const {
   calculateStreaks,
   calculateTaskMetrics,
 } = require('../services/streakService');
+const {
+  calculateLifeScores,
+  logUserActivity,
+  generate365Heatmap,
+  generateVelocityData,
+  generateExportSummary,
+} = require('../services/analyticsService');
 
 const isValidDateStr = (dateStr) => {
   return /^\d{4}-\d{2}-\d{2}$/.test(dateStr) && !isNaN(Date.parse(dateStr));
@@ -445,6 +455,145 @@ router.get('/year/:year', protect, async (req, res) => {
     res.status(200).json({ year, days });
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+});
+
+// ============================================================================
+// Life Analytics & Progress Dashboard Endpoints
+// ============================================================================
+
+// @route   GET /api/progress/dashboard
+// @desc    Holistic Life Score, domain breakdown, streak & momentum
+router.get('/dashboard', protect, async (req, res) => {
+  try {
+    const dashboardData = await calculateLifeScores(req.user.id);
+    res.status(200).json(dashboardData);
+  } catch (error) {
+    console.error('Error loading analytics dashboard:', error);
+    res.status(500).json({ message: error.message || 'Server error loading dashboard analytics' });
+  }
+});
+
+// @route   GET /api/progress/heatmap
+// @desc    365-day aggregated activity heatmap (intensity 0-4)
+router.get('/heatmap', protect, async (req, res) => {
+  try {
+    const year = req.query.year ? parseInt(req.query.year, 10) : new Date().getFullYear();
+    const heatmap = await generate365Heatmap(req.user.id, year);
+    res.status(200).json(heatmap);
+  } catch (error) {
+    console.error('Error generating heatmap:', error);
+    res.status(500).json({ message: error.message || 'Server error generating heatmap' });
+  }
+});
+
+// @route   GET /api/progress/velocity-chart
+// @desc    Progress velocity vs target deadline curve (30d / 60d / 90d)
+router.get('/velocity-chart', protect, async (req, res) => {
+  try {
+    const range = req.query.range ? parseInt(req.query.range, 10) : 90;
+    const velocityData = await generateVelocityData(req.user.id, range);
+    res.status(200).json(velocityData);
+  } catch (error) {
+    console.error('Error generating velocity chart data:', error);
+    res.status(500).json({ message: error.message || 'Server error generating velocity data' });
+  }
+});
+
+// @route   GET /api/progress/reflections
+// @desc    Paginated weekly reflections with search
+router.get('/reflections', protect, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+    const search = req.query.search ? String(req.query.search).trim() : '';
+
+    const query = { user: req.user.id };
+    if (search) {
+      query.$or = [
+        { key_focus_next_week: { $regex: search, $options: 'i' } },
+        { bottlenecks: { $regex: search, $options: 'i' } },
+        { top_wins: { $elemMatch: { $regex: search, $options: 'i' } } },
+      ];
+    }
+
+    const [reflections, total] = await Promise.all([
+      WeeklyReflection.find(query)
+        .sort({ created_at: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit),
+      WeeklyReflection.countDocuments(query),
+    ]);
+
+    res.status(200).json({
+      reflections,
+      page,
+      totalPages: Math.ceil(total / limit) || 1,
+      total,
+    });
+  } catch (error) {
+    console.error('Error fetching reflections:', error);
+    res.status(500).json({ message: error.message || 'Server error loading reflections' });
+  }
+});
+
+// @route   POST /api/progress/reflections
+// @desc    Save weekly retrospective & trigger momentum recalculation
+router.post('/reflections', protect, async (req, res) => {
+  try {
+    const {
+      week_start_date,
+      energy_rating,
+      productivity_rating,
+      top_wins,
+      bottlenecks,
+      key_focus_next_week,
+    } = req.body;
+
+    if (!key_focus_next_week || !key_focus_next_week.trim()) {
+      return res.status(400).json({ message: 'Key focus for next week is required' });
+    }
+
+    const weekStart = week_start_date || new Date().toISOString().split('T')[0];
+
+    const reflection = await WeeklyReflection.create({
+      user: req.user.id,
+      week_start_date: weekStart,
+      energy_rating: Math.min(10, Math.max(1, Number(energy_rating) || 7)),
+      productivity_rating: Math.min(10, Math.max(1, Number(productivity_rating) || 7)),
+      top_wins: Array.isArray(top_wins) ? top_wins.filter(Boolean) : [],
+      bottlenecks: bottlenecks ? String(bottlenecks).trim() : '',
+      key_focus_next_week: key_focus_next_week.trim(),
+    });
+
+    // Log user activity
+    await logUserActivity(req.user.id, 'journal', 'weekly_reflection', 3, {
+      reflectionId: reflection._id,
+    });
+
+    // Recalculate life scores immediately
+    const updatedScores = await calculateLifeScores(req.user.id);
+
+    res.status(201).json({
+      reflection,
+      life_scores: updatedScores,
+      message: 'Weekly reflection recorded successfully',
+    });
+  } catch (error) {
+    console.error('Error saving reflection:', error);
+    res.status(500).json({ message: error.message || 'Server error saving reflection' });
+  }
+});
+
+// @route   GET /api/progress/export-pdf
+// @desc    Executive PDF/Printable audit report summary
+router.get('/export-pdf', protect, async (req, res) => {
+  try {
+    const summary = await generateExportSummary(req.user.id);
+    res.status(200).json(summary);
+  } catch (error) {
+    console.error('Error generating export summary:', error);
+    res.status(500).json({ message: error.message || 'Server error generating export report' });
   }
 });
 

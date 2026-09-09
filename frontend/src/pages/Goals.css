@@ -1,21 +1,172 @@
-.goals-page { max-width: 900px; margin: 0 auto; }
-.goals-header { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-3); flex-wrap: wrap; }
+/* ==========================================================================
+   Goals.css — Vault & Health Design System Harmony
+   Matches Document Vault & Health: Clean Slate #0F172A text, #ffffff cards,
+   #e2e8f0 borders, #4f46e5 indigo accents, #eef2ff badge pills, and
+   consistent responsive layouts.
+   ========================================================================== */
 
-.goal-form { padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); margin-bottom: var(--space-5); }
-.goal-form-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--space-2); }
+.goals-page-container {
+  min-height: 100vh;
+  padding: 1.5rem 1.25rem 4rem 1.25rem;
+  max-width: 80rem;
+  margin: 0 auto;
+  color: #0f172a;
+}
 
-.goals-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--space-4); }
+@media (min-width: 640px) {
+  .goals-page-container {
+    padding-left: 1.75rem;
+    padding-right: 1.75rem;
+    padding-top: 2rem;
+  }
+}
 
-.goal-card { padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); }
-.goal-card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-2); }
-.goal-card-top h3 { font-size: 15.5px; }
-.goal-cat { color: var(--text-muted); font-size: 12px; text-transform: capitalize; margin-bottom: 4px; }
+/* ── Badge Pill (Matching Vault's .vault-badge-encrypted) ── */
+.goals-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  background-color: #eef2ff;
+  color: #4f46e5;
+  border: 1px solid #c7d2fe;
+}
 
-.goal-card-bottom { display: flex; justify-content: space-between; align-items: center; margin-top: var(--space-2); flex-wrap: wrap; gap: var(--space-2); }
-.goal-card-bottom > span { font-size: 12.5px; color: var(--text-muted); }
-.goal-actions { display: flex; gap: 6px; align-items: center; }
-.goal-btn { padding: 6px 12px; font-size: 14px; font-weight: 700; }
+/* ── Vault Signature Primary Button (Add/Create) ── */
+.vault-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.125rem;
+  background: #0f172a;
+  border: 1px solid rgba(51, 65, 85, 0.8);
+  color: #f1f5f9;
+  border-radius: 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
 
-@media (max-width: 500px) {
-  .goal-form-row { grid-template-columns: 1fr; }
+.vault-btn-primary:hover {
+  filter: brightness(1.1);
+  border-color: rgba(99, 102, 241, 0.6);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.25);
+}
+
+.vault-btn-primary:active {
+  transform: translateY(0);
+}
+
+/* ── Metric Summary Cards (White, crisp border, soft shadow) ── */
+.metric-summary-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.metric-summary-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.07);
+  border-color: #cbd5e1;
+}
+
+/* ── Category Navigation Tabs (Matching Vault .category-tab-pill) ── */
+.goals-category-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+  scrollbar-width: thin;
+}
+
+.goals-category-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: all 0.18s ease;
+  cursor: pointer;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #475569;
+}
+
+.goals-category-pill:hover {
+  background: #f8fafc;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+.goals-category-pill.active {
+  background: #4f46e5;
+  color: #ffffff;
+  border-color: #4f46e5;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.22);
+}
+
+/* ── Controls Toolbar (Matching Vault .vault-controls-bar) ── */
+.goals-controls-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+@media (min-width: 640px) {
+  .goals-controls-bar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+/* ── Goal Card (Matching Vault & Health Cards) ── */
+.goal-card-item {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.goal-card-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.07);
+  border-color: #cbd5e1;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
