@@ -1,4 +1,135 @@
-/* find: */
-.timeline-year { font-family: var(--font-display); font-size: 20px; font-weight: 700; color: #b3b1ff; margin-bottom: var(--space-3); }
-/* replace with: */
-.timeline-year { font-family: var(--font-display); font-size: 20px; font-weight: 700; color: var(--gold-600); margin-bottom: var(--space-3); }
+/* ==========================================================================
+   Memories.css — Exact Vault & Health Design System Harmony
+   Matches Document Vault & Health: Clean Slate #0F172A text, #ffffff cards, 
+   #e2e8f0 borders, #4f46e5 indigo / #3b82f6 cobalt accents, #fef3c7 / #f59e0b 
+   nostalgia golds, and clean crisp white in-context modals.
+   ========================================================================== */
+
+.memories-page {
+  min-height: 100vh;
+  padding: 1.5rem 1.25rem 4rem 1.25rem;
+  max-width: 88rem;
+  margin: 0 auto;
+  color: #0f172a;
+}
+
+@media (min-width: 640px) {
+  .memories-page {
+    padding-left: 1.75rem;
+    padding-right: 1.75rem;
+    padding-top: 2rem;
+  }
+}
+
+/* ── Vault-Aligned Card System (White, crisp border, soft shadow) ── */
+.mem-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  position: relative;
+}
+
+.mem-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.07);
+  border-color: #cbd5e1;
+}
+
+/* ── Vertical Timeline Connector Rail ── */
+.timeline-stem-container {
+  position: relative;
+  padding-left: 1.75rem;
+}
+
+.timeline-stem-line {
+  position: absolute;
+  top: 1rem;
+  bottom: 1rem;
+  left: 0.625rem;
+  width: 2px;
+  background: linear-gradient(to bottom, #818cf8, #cbd5e1, #e2e8f0);
+}
+
+.timeline-stem-marker {
+  position: absolute;
+  left: 0.25rem;
+  top: 0.5rem;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 3px solid #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+/* ── Crisp Light Modal Backdrop & Container (Matching main page colors) ── */
+.frosted-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background-color: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  animation: memFadeIn 0.15s ease-out;
+}
+
+.frosted-modal-container {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1.25rem;
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25);
+  width: 100%;
+  overflow: hidden;
+  color: #0f172a;
+  animation: memPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes memFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes memPopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* ── Scrollbars ── */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 9999px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

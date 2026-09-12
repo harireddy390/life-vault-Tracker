@@ -1,151 +1,369 @@
-import { useEffect, useState } from 'react';
-import expenseService from '../services/expenseService';
+import React, { useState, useEffect, useCallback } from 'react';
 import Toast from '../components/Toast';
+import CashflowSummaryBar from '../components/finance/CashflowSummaryBar';
+import CashflowTrendChart from '../components/finance/CashflowTrendChart';
+import BudgetDepletionGrid from '../components/finance/BudgetDepletionGrid';
+import UpcomingBillsRadar from '../components/finance/UpcomingBillsRadar';
+import TransactionLedger from '../components/finance/TransactionLedger';
+import TransactionModal from '../components/finance/TransactionModal';
+import BudgetModal from '../components/finance/BudgetModal';
+import RecurringBillModal from '../components/finance/RecurringBillModal';
+import ReceiptPreviewModal from '../components/finance/ReceiptPreviewModal';
+import FinanceDeleteModal from '../components/finance/FinanceDeleteModal';
+import fs from '../services/financeService';
 import './Finance.css';
 
-const CATEGORIES = ['food', 'transport', 'shopping', 'education', 'health', 'bills', 'other'];
-const CATEGORY_COLORS = {
-  food: 'var(--gold-500)', transport: 'var(--teal-500)', shopping: 'var(--violet-500)',
-  education: 'var(--success-500)', health: 'var(--rose-500)', bills: 'var(--warning-500)', other: 'var(--text-muted)',
-};
-
 export default function Finance() {
-  const [expenses, setExpenses] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState(null);
-  const [form, setForm] = useState({ title: '', amount: '', category: 'other', type: 'expense' });
-
-  useEffect(() => { load(); }, []);
-
-  const load = async () => {
-    setLoading(true);
-    try { setExpenses(await expenseService.getExpenses()); }
-    catch { showToast('Could not load expenses.', 'error'); }
-    finally { setLoading(false); }
+  const currentMonthStr = () => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   };
+
+  // ── Month & Filter State ──
+  const [selectedMonth, setSelectedMonth] = useState(currentMonthStr());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [activeType, setActiveType] = useState('All');
+  const [activeCategory, setActiveCategory] = useState('All');
+  const [activePaymentMethod, setActivePaymentMethod] = useState('All');
+  const [page, setPage] = useState(1);
+
+  // ── Data State ──
+  const [overview, setOverview] = useState({});
+  const [transactionsData, setTransactionsData] = useState({ transactions: [], total: 0, totalPages: 1 });
+  const [budgets, setBudgets] = useState([]);
+  const [recurringBills, setRecurringBills] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // ── Toast Feedback ──
+  const [toast, setToast] = useState(null);
+
+  // ── Modal State ──
+  const [txModal, setTxModal] = useState(null); // null | 'create' | transactionObj
+  const [budgetModal, setBudgetModal] = useState(null); // null | { category, amount, month }
+  const [recurringModal, setRecurringModal] = useState(null); // null | 'create' | billObj
+  const [receiptModal, setReceiptModal] = useState(null); // null | transactionObj
+  const [deleteModal, setDeleteModal] = useState(null); // null | { type, item, title, description }
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 2500);
+    setTimeout(() => setToast(null), 3000);
   };
 
-  const handleAdd = async (e) => {
-    e.preventDefault();
-    if (!form.title.trim() || !form.amount) return;
+  // Debounce search query
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  // ── Load All Data ──────────────────────────────────────────────────────────
+  const loadOverviewAndBudgets = useCallback(async () => {
     try {
-      const created = await expenseService.createExpense({ ...form, amount: Number(form.amount) });
-      setExpenses((prev) => [created, ...prev]);
-      setForm({ title: '', amount: '', category: 'other', type: 'expense' });
-    } catch { showToast('Could not add entry.', 'error'); }
+      const [ov, b, rb] = await Promise.all([
+        fs.getOverview(selectedMonth).catch(() => ({})),
+        fs.getBudgets(selectedMonth).catch(() => []),
+        fs.getRecurringBills().catch(() => []),
+      ]);
+      setOverview(ov);
+      setBudgets(b);
+      setRecurringBills(rb);
+    } catch {
+      showToast('Could not load financial overview.', 'error');
+    }
+  }, [selectedMonth]);
+
+  const loadTransactions = useCallback(async () => {
+    try {
+      const data = await fs.getTransactions({
+        page,
+        limit: 50,
+        type: activeType,
+        category: activeCategory,
+        payment_method: activePaymentMethod,
+        search: debouncedSearch,
+        startDate: `${selectedMonth}-01`,
+        endDate: (() => {
+          const [y, m] = selectedMonth.split('-').map(Number);
+          const endDay = new Date(y, m, 0).getDate();
+          return `${selectedMonth}-${endDay}`;
+        })(),
+      });
+      setTransactionsData(data);
+    } catch {
+      showToast('Could not load transaction ledger.', 'error');
+    }
+  }, [selectedMonth, page, activeType, activeCategory, activePaymentMethod, debouncedSearch]);
+
+  const loadAll = useCallback(async () => {
+    setLoading(true);
+    await Promise.all([loadOverviewAndBudgets(), loadTransactions()]);
+    setLoading(false);
+  }, [loadOverviewAndBudgets, loadTransactions]);
+
+  useEffect(() => {
+    loadAll();
+  }, [selectedMonth, loadAll]);
+
+  useEffect(() => {
+    loadTransactions();
+  }, [page, activeType, activeCategory, activePaymentMethod, debouncedSearch, loadTransactions]);
+
+  // ── Handlers: Transactions ──────────────────────────────────────────────────
+  const handleSaveTransaction = async (formDataOrJson, id) => {
+    try {
+      if (id) {
+        await fs.updateTransaction(id, formDataOrJson);
+        showToast('Transaction updated ✓');
+      } else {
+        await fs.createTransaction(formDataOrJson);
+        showToast('Transaction recorded ✓');
+      }
+      setTxModal(null);
+      await Promise.all([loadOverviewAndBudgets(), loadTransactions()]);
+    } catch (err) {
+      showToast(err?.response?.data?.message || 'Failed to save transaction.', 'error');
+    }
   };
 
-  const remove = async (id) => {
-    await expenseService.deleteExpense(id);
-    setExpenses((prev) => prev.filter((e) => e._id !== id));
+  const handleDeleteTransaction = async (tx) => {
+    try {
+      await fs.deleteTransaction(tx._id);
+      showToast('Transaction deleted.');
+      setDeleteModal(null);
+      await Promise.all([loadOverviewAndBudgets(), loadTransactions()]);
+    } catch {
+      showToast('Delete failed.', 'error');
+    }
   };
 
-  const now = new Date();
-  const thisMonth = expenses.filter((e) => {
-    const d = new Date(e.date);
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  });
-  const spent = thisMonth.filter((e) => e.type === 'expense').reduce((s, e) => s + e.amount, 0);
-  const income = thisMonth.filter((e) => e.type === 'income').reduce((s, e) => s + e.amount, 0);
+  // ── Handlers: Budgets ───────────────────────────────────────────────────────
+  const handleSaveBudget = async (data) => {
+    try {
+      await fs.setBudget(data);
+      showToast('Budget allocation updated ✓');
+      setBudgetModal(null);
+      await loadOverviewAndBudgets();
+    } catch (err) {
+      showToast(err?.response?.data?.message || 'Failed to set budget.', 'error');
+    }
+  };
 
-  const byCategory = CATEGORIES.map((cat) => ({
-    cat,
-    total: thisMonth.filter((e) => e.category === cat && e.type === 'expense').reduce((s, e) => s + e.amount, 0),
-  })).filter((c) => c.total > 0).sort((a, b) => b.total - a.total);
+  const handleDeleteBudget = async (b) => {
+    try {
+      await fs.deleteBudget(b._id);
+      showToast('Budget removed.');
+      setDeleteModal(null);
+      await loadOverviewAndBudgets();
+    } catch {
+      showToast('Could not remove budget.', 'error');
+    }
+  };
 
-  let cumulative = 0;
-  const gradientStops = byCategory.map(({ cat, total }) => {
-    const start = spent ? (cumulative / spent) * 360 : 0;
-    cumulative += total;
-    const end = spent ? (cumulative / spent) * 360 : 0;
-    return `${CATEGORY_COLORS[cat]} ${start}deg ${end}deg`;
-  }).join(', ');
+  // ── Handlers: Recurring Bills ──────────────────────────────────────────────
+  const handleSaveRecurring = async (data, id) => {
+    try {
+      if (id) {
+        await fs.updateRecurringBill(id, data);
+        showToast('Recurring bill updated ✓');
+      } else {
+        await fs.createRecurringBill(data);
+        showToast('Recurring bill added ✓');
+      }
+      setRecurringModal(null);
+      await loadOverviewAndBudgets();
+    } catch (err) {
+      showToast(err?.response?.data?.message || 'Failed to save recurring bill.', 'error');
+    }
+  };
+
+  const handleMarkPaid = async (id) => {
+    try {
+      await fs.markRecurringBillPaid(id);
+      showToast('Bill marked as paid! Due date advanced ✓');
+      await Promise.all([loadOverviewAndBudgets(), loadTransactions()]);
+    } catch {
+      showToast('Could not update bill payment status.', 'error');
+    }
+  };
+
+  const handleDeleteRecurring = async (bill) => {
+    try {
+      await fs.deleteRecurringBill(bill._id);
+      showToast('Recurring bill removed.');
+      setDeleteModal(null);
+      await loadOverviewAndBudgets();
+    } catch {
+      showToast('Could not remove bill.', 'error');
+    }
+  };
+
+  // ── Handlers: CSV Export ────────────────────────────────────────────────────
+  const handleExportCsv = async () => {
+    try {
+      showToast('Generating CSV export…');
+      await fs.exportCsv(selectedMonth, activeType);
+      showToast('CSV downloaded ✓');
+    } catch {
+      showToast('Failed to export CSV.', 'error');
+    }
+  };
+
+  // Confirm delete dispatch
+  const handleConfirmDelete = async () => {
+    if (!deleteModal) return;
+    if (deleteModal.type === 'tx') await handleDeleteTransaction(deleteModal.item);
+    else if (deleteModal.type === 'budget') await handleDeleteBudget(deleteModal.item);
+    else if (deleteModal.type === 'recurring') await handleDeleteRecurring(deleteModal.item);
+  };
+
+  if (loading && !overview.selectedMonth) {
+    return (
+      <div className="fin-page fin-loading">
+        <div className="fin-spinner" />
+        <p>Loading Finance & Wealth Command Center…</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="finance-page">
+    <div className="fin-page">
       <Toast message={toast?.message} type={toast?.type} />
-      <div className="page-header">
-        <h1>Finance</h1>
-        <p className="page-subtitle">Manual tracking — no bank connection needed.</p>
+
+      {/* ════════════════════════════════════════════════════════════════
+          ZONE 1: CASHFLOW & METRIC SUMMARY BAR
+      ════════════════════════════════════════════════════════════════ */}
+      <CashflowSummaryBar
+        overview={overview}
+        selectedMonth={selectedMonth}
+        onChangeMonth={setSelectedMonth}
+        onAddTransaction={() => setTxModal('create')}
+        onSetBudget={() => setBudgetModal({ month: selectedMonth })}
+        onAddRecurring={() => setRecurringModal('create')}
+        onExportCsv={handleExportCsv}
+      />
+
+      {/* ════════════════════════════════════════════════════════════════
+          ZONE 2: DAILY CASHFLOW TREND & CATEGORY DISTRIBUTION
+      ════════════════════════════════════════════════════════════════ */}
+      <CashflowTrendChart
+        dailyTrend={overview.dailyTrend || []}
+        categoryBreakdown={overview.categoryBreakdown || []}
+        totalExpenses={overview.totalExpenses || 0}
+      />
+
+      {/* ════════════════════════════════════════════════════════════════
+          ZONE 3 & 4: DUAL RADAR GRID (BUDGET DEPLETION & UPCOMING BILLS)
+      ════════════════════════════════════════════════════════════════ */}
+      <div className="fin-middle-grid">
+        {/* Left: Category Budget Depletion Progress */}
+        <BudgetDepletionGrid
+          budgets={budgets}
+          onSetBudget={() => setBudgetModal({ month: selectedMonth })}
+          onEditBudget={(b) => setBudgetModal({ category: b.category, amount: b.allocated_amount, month: b.month_year })}
+          onDeleteBudget={(b) =>
+            setDeleteModal({
+              type: 'budget',
+              item: b,
+              title: 'Remove Budget Allocation?',
+              description: `Are you sure you want to remove the monthly spending limit for ${b.category}?`,
+            })
+          }
+        />
+
+        {/* Right: Subscriptions & Upcoming Bills Radar */}
+        <UpcomingBillsRadar
+          bills={recurringBills}
+          onAddRecurring={() => setRecurringModal('create')}
+          onEditRecurring={(bill) => setRecurringModal(bill)}
+          onMarkPaid={handleMarkPaid}
+          onDeleteRecurring={(bill) =>
+            setDeleteModal({
+              type: 'recurring',
+              item: bill,
+              title: 'Cancel Recurring Bill Reminder?',
+              description: `Are you sure you want to stop tracking "${bill.title}"?`,
+            })
+          }
+        />
       </div>
 
-      <div className="finance-summary-row">
-        <div className="card finance-summary-card">
-          <p className="panel-eyebrow">Spent This Month</p>
-          <p className="finance-big-num spent">₹{spent.toLocaleString()}</p>
-        </div>
-        <div className="card finance-summary-card">
-          <p className="panel-eyebrow">Income This Month</p>
-          <p className="finance-big-num income">₹{income.toLocaleString()}</p>
-        </div>
-      </div>
+      {/* ════════════════════════════════════════════════════════════════
+          ZONE 5: INTERACTIVE TRANSACTION LEDGER
+      ════════════════════════════════════════════════════════════════ */}
+      <TransactionLedger
+        transactions={transactionsData.transactions}
+        total={transactionsData.total}
+        page={transactionsData.page}
+        totalPages={transactionsData.totalPages}
+        onPageChange={setPage}
+        activeType={activeType}
+        onTypeChange={(t) => { setActiveType(t); setPage(1); }}
+        activeCategory={activeCategory}
+        onCategoryChange={(c) => { setActiveCategory(c); setPage(1); }}
+        activePaymentMethod={activePaymentMethod}
+        onPaymentMethodChange={(m) => { setActivePaymentMethod(m); setPage(1); }}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onAddTransaction={() => setTxModal('create')}
+        onEditTransaction={(tx) => setTxModal(tx)}
+        onDeleteTransaction={(tx) =>
+          setDeleteModal({
+            type: 'tx',
+            item: tx,
+            title: 'Delete Transaction?',
+            description: `"${tx.title}" (${tx.type}) will be permanently deleted and your budget re-calculated.`,
+          })
+        }
+        onViewReceipt={(tx) => setReceiptModal(tx)}
+      />
 
-      <div className="finance-grid">
-        <div className="card panel">
-          <p className="panel-eyebrow">Add Entry</p>
-          <form className="finance-form" onSubmit={handleAdd}>
-            <input className="input" placeholder="Description" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-            <input className="input" type="number" placeholder="Amount (₹)" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
-            <div className="finance-form-row">
-              <select className="input" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-                {CATEGORIES.map((c) => <option key={c} value={c}>{c[0].toUpperCase() + c.slice(1)}</option>)}
-              </select>
-              <select className="input" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-                <option value="expense">Expense</option>
-                <option value="income">Income</option>
-              </select>
-            </div>
-            <button className="btn btn-primary" type="submit">Add</button>
-          </form>
-        </div>
+      {/* ════════════════════════════════════════════════════════════════
+          IN-CONTEXT MODALS (STRICTLY ZERO PAGE REDIRECTS)
+      ════════════════════════════════════════════════════════════════ */}
+      {txModal && (
+        <TransactionModal
+          transaction={txModal === 'create' ? null : txModal}
+          onSave={handleSaveTransaction}
+          onClose={() => setTxModal(null)}
+        />
+      )}
 
-        <div className="card panel text-center">
-          <p className="panel-eyebrow">Spending by Category</p>
-          {byCategory.length === 0 ? (
-            <div className="empty-state"><div className="empty-icon">{'\u{1F4B0}'}</div><p>No expenses logged this month.</p></div>
-          ) : (
-            <>
-              <div className="donut" style={{ background: `conic-gradient(${gradientStops})` }}>
-                <div className="donut-center"><span>₹{spent.toLocaleString()}</span><span className="donut-label">This Month</span></div>
-              </div>
-              <div className="donut-legend">
-                {byCategory.map(({ cat, total }) => (
-                  <div key={cat} className="legend-row">
-                    <span className="legend-dot" style={{ background: CATEGORY_COLORS[cat] }} />
-                    <span className="legend-label">{cat}</span>
-                    <span className="legend-value">₹{total.toLocaleString()}</span>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
+      {budgetModal && (
+        <BudgetModal
+          initialCategory={budgetModal.category}
+          initialAmount={budgetModal.amount}
+          currentMonth={budgetModal.month || selectedMonth}
+          onSave={handleSaveBudget}
+          onClose={() => setBudgetModal(null)}
+        />
+      )}
 
-      <div className="card panel">
-        <p className="panel-eyebrow">Recent Transactions</p>
-        {loading ? (
-          <div className="panel-loading"><span className="spinner"></span> Loading…</div>
-        ) : expenses.length === 0 ? (
-          <div className="empty-state"><p>No transactions yet.</p></div>
-        ) : (
-          <ul className="tx-list">
-            {expenses.slice(0, 10).map((e) => (
-              <li key={e._id} className="tx-row">
-                <span className="tx-dot" style={{ background: CATEGORY_COLORS[e.category] }} />
-                <span className="tx-title">{e.title}</span>
-                <span className="tx-date">{new Date(e.date).toLocaleDateString()}</span>
-                <span className={`tx-amount ${e.type}`}>{e.type === 'income' ? '+' : '−'}₹{e.amount.toLocaleString()}</span>
-                <button className="btn-danger" onClick={() => remove(e._id)}>Delete</button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      {recurringModal && (
+        <RecurringBillModal
+          bill={recurringModal === 'create' ? null : recurringModal}
+          onSave={handleSaveRecurring}
+          onClose={() => setRecurringModal(null)}
+        />
+      )}
+
+      {receiptModal && (
+        <ReceiptPreviewModal
+          transaction={receiptModal}
+          onClose={() => setReceiptModal(null)}
+        />
+      )}
+
+      {deleteModal && (
+        <FinanceDeleteModal
+          title={deleteModal.title}
+          description={deleteModal.description}
+          onConfirm={handleConfirmDelete}
+          onClose={() => setDeleteModal(null)}
+        />
+      )}
     </div>
   );
 }

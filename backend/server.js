@@ -14,6 +14,10 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads/learning', express.static(path.join(__dirname, 'uploads', 'learning')));
+app.use('/uploads/finance', express.static(path.join(__dirname, 'uploads', 'finance')));
+app.use('/uploads/family', express.static(path.join(__dirname, 'uploads', 'family')));
+app.use('/uploads/memories', express.static(path.join(__dirname, 'uploads', 'memories')));
 
 // Routes
 app.use('/api/auth', require('./routes/authRoute'));
@@ -34,6 +38,8 @@ app.use('/api/progress', require('./routes/progressRoute'));
 app.use('/api/steps', require('./routes/stepsRoute'));
 app.use('/api/subscriptions', require('./routes/subscriptionRoute'));
 app.use('/api/health', require('./routes/healthRoute'));
+app.use('/api/learning', require('./routes/learningRoute'));
+app.use('/api/finance', require('./routes/financeRoute'));
 
   app.get('/', (req, res) => {
   res.send('LifeVault API is running.');

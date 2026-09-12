@@ -1,4 +1,296 @@
-/* find: */
-.family-relation { color: #b3b1ff; font-size: 12.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
-/* replace with: */
-.family-relation { color: var(--gold-600); font-size: 12.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+/* ==========================================================================
+   Family.css — Exact Vault & Health Design System Harmony
+   Matches Document Vault & Health: Clean Slate #0F172A text, #ffffff cards, 
+   #e2e8f0 borders, #4f46e5 indigo / #3b82f6 cobalt accents, #eef2ff badge pills,
+   and deep charcoal modals #0f172a.
+   ========================================================================== */
+
+.family-page {
+  min-height: 100vh;
+  padding: 1.5rem 1.25rem 4rem 1.25rem;
+  max-width: 88rem;
+  margin: 0 auto;
+  color: #0f172a;
+}
+
+@media (min-width: 640px) {
+  .family-page {
+    padding-left: 1.75rem;
+    padding-right: 1.75rem;
+    padding-top: 2rem;
+  }
+}
+
+/* ── Vault-Aligned Card System (White, crisp border, soft shadow) ── */
+.fam-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  position: relative;
+}
+
+.fam-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.07);
+  border-color: #cbd5e1;
+}
+
+/* ── Vault Signature Primary Dark Button ── */
+.vault-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  background: #0f172a;
+  border: 1px solid rgba(51, 65, 85, 0.8);
+  color: #f1f5f9;
+  border-radius: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+
+.vault-btn-primary:hover {
+  filter: brightness(1.1);
+  border-color: rgba(99, 102, 241, 0.6);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+  transform: translateY(-1px);
+}
+
+.vault-btn-primary:active {
+  transform: scale(0.98);
+}
+
+.vault-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ── Vibrant Indigo / Cobalt Action Button ── */
+.vault-btn-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.125rem;
+  background: #4f46e5;
+  border: 1px solid #6366f1;
+  color: #ffffff;
+  border-radius: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.3);
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+
+.vault-btn-action:hover {
+  background: #4338ca;
+  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.45);
+  transform: translateY(-1px);
+}
+
+.vault-btn-action:active {
+  transform: scale(0.98);
+}
+
+.vault-btn-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ── Sleek Ghost Button ── */
+.vault-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.875rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  border-radius: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.vault-btn-ghost:hover {
+  background: #f8fafc;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+.vault-btn-ghost:active {
+  transform: scale(0.98);
+}
+
+/* ── Emergency Crimson Button ── */
+.vault-btn-emergency {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.55rem 0.95rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  border-radius: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.vault-btn-emergency:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+/* ── Encrypted Badge (Exact match to Vault) ── */
+.vault-badge-encrypted {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  background-color: #eef2ff;
+  color: #4f46e5;
+  border: 1px solid #c7d2fe;
+}
+
+/* ── Status Badges (Health & Vault matched) ── */
+.badge-emerald {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 9999px;
+  background-color: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #059669;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.badge-crimson {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 9999px;
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.badge-cobalt {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 9999px;
+  background-color: #eef2ff;
+  border: 1px solid #c7d2fe;
+  color: #4f46e5;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.badge-amber {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 9999px;
+  background-color: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #d97706;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+/* ── Crisp Light Modal Backdrop & Container (Matching main page colors) ── */
+.frosted-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background-color: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  animation: famFadeIn 0.15s ease-out;
+}
+
+.frosted-modal-container {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1.25rem;
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25);
+  width: 100%;
+  overflow: hidden;
+  color: #0f172a;
+  animation: famPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes famFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes famPopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* ── Scrollbars ── */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 9999px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
