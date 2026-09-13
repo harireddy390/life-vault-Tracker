@@ -24,6 +24,11 @@ const getConversation = async (id) => {
   return res.data;
 };
 
+const getMessages = async (id) => {
+  const res = await api.get(`/ai/conversations/${id}/messages`);
+  return res.data;
+};
+
 const createConversation = async (title = 'New Conversation') => {
   const res = await api.post('/ai/conversations', { title });
   return res.data;
@@ -39,7 +44,7 @@ const deleteConversation = async (id) => {
   return res.data;
 };
 
-// Attachment Upload API
+// Attachment Upload API (Supports files up to 50MB)
 const uploadAttachment = async (file) => {
   const formData = new FormData();
   formData.append('file', file);
@@ -50,15 +55,27 @@ const uploadAttachment = async (file) => {
   return res.data;
 };
 
-// SSE Streaming Message API
+// Confirmed Tool Execution API
+const executeConfirmedTool = async ({ messageId, toolCallId, toolName, arguments: toolArgs }) => {
+  const res = await api.post('/ai/tools/execute-confirmed', {
+    messageId,
+    toolCallId,
+    toolName,
+    arguments: toolArgs,
+  });
+  return res.data;
+};
+
+// SSE Streaming Message API with Tool Calling Support
 async function streamMessage({
   conversationId,
   messages,
   attachments = [],
-  includeContext = false,
+  includeContext = true,
   noteId = null,
   onToken,
   onConversation,
+  onToolCalls,
   onDone,
   onError,
   signal,
@@ -88,7 +105,7 @@ async function streamMessage({
     });
   } catch (err) {
     if (err.name === 'AbortError') {
-      onDone();
+      onDone?.({});
       return;
     }
     onError('Could not reach the server. Please check your connection.');
@@ -133,6 +150,8 @@ async function streamMessage({
           onToken?.(payload.token);
         } else if (type === 'conversation') {
           onConversation?.(payload);
+        } else if (type === 'tool_calls') {
+          onToolCalls?.(payload.tool_calls);
         } else if (type === 'done') {
           sawEnd = true;
           onDone?.(payload);
@@ -158,9 +177,11 @@ async function streamMessage({
 export default {
   getConversations,
   getConversation,
+  getMessages,
   createConversation,
   renameConversation,
   deleteConversation,
   uploadAttachment,
+  executeConfirmedTool,
   streamMessage,
 };

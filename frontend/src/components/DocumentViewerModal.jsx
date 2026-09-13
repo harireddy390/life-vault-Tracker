@@ -22,11 +22,24 @@ export default function DocumentViewerModal({ doc, onClose, onDownload, onDelete
       setLoading(true);
       setError('');
       try {
-        const url = await documentService.getPreviewUrl(doc._id);
+        let url;
+        if (doc.previewUrl && (doc.previewUrl.startsWith('/uploads') || doc.previewUrl.startsWith('http') || doc.previewUrl.startsWith('blob:') || doc.previewUrl.startsWith('data:'))) {
+          url = doc.previewUrl;
+          setPreviewUrl(url);
+          setLoading(false);
+          return;
+        } else if (doc.previewUrl && doc.previewUrl.startsWith('/api')) {
+          const stored = localStorage.getItem('lifevault_user');
+          const token = stored ? JSON.parse(stored).token : null;
+          const res = await fetch(doc.previewUrl, { headers: { Authorization: `Bearer ${token}` } });
+          if (!res.ok) throw new Error('Could not fetch file preview');
+          const blob = await res.blob();
+          url = window.URL.createObjectURL(blob);
+        } else {
+          url = await documentService.getPreviewUrl(doc._id);
+        }
+
         if (cancelled) {
-          // This run got cancelled (e.g. React's dev-mode double effect, or
-          // the modal switched documents mid-fetch) — clean up the blob we
-          // just created instead of leaving it dangling.
           window.URL.revokeObjectURL(url);
           return;
         }
@@ -43,7 +56,7 @@ export default function DocumentViewerModal({ doc, onClose, onDownload, onDelete
     return () => {
       cancelled = true;
     };
-  }, [doc._id, doc.mimeType]);
+  }, [doc._id, doc.mimeType, doc.previewUrl]);
 
   // Revoke the blob URL only when the modal itself is actually closed,
   // not on every effect re-run.
@@ -53,13 +66,21 @@ export default function DocumentViewerModal({ doc, onClose, onDownload, onDelete
     };
   }, []);
 
+  const handleDownload = () => {
+    if (onDownload) {
+      onDownload(doc);
+    } else if (doc.downloadUrl || doc.previewUrl) {
+      window.open(doc.downloadUrl || doc.previewUrl, '_blank');
+    }
+  };
+
   return (
     <div className="viewer-backdrop" onClick={onClose}>
       <div className="viewer-modal" onClick={(e) => e.stopPropagation()}>
         <div className="viewer-header">
           <div>
-            <p className="viewer-title">{doc.originalName}</p>
-            <p className="viewer-meta">{doc.mimeType} · {(doc.size / 1024).toFixed(1)} KB · Uploaded {new Date(doc.createdAt).toLocaleDateString()}</p>
+            <p className="viewer-title">{doc.originalName || doc.title}</p>
+            <p className="viewer-meta">{doc.mimeType || 'Document'} · {doc.size ? `${(doc.size / 1024).toFixed(1)} KB · ` : ''}{doc.source ? `Source: ${doc.source}` : (doc.createdAt ? `Uploaded ${new Date(doc.createdAt).toLocaleDateString()}` : '')}</p>
           </div>
           <button className="viewer-close" onClick={onClose} aria-label="Close">&times;</button>
         </div>
@@ -75,17 +96,20 @@ export default function DocumentViewerModal({ doc, onClose, onDownload, onDelete
               <p>No inline preview for this file type — download it to open it.</p>
             </div>
           ) : doc.mimeType === 'application/pdf' ? (
-            <iframe title={doc.originalName} src={previewUrl} className="viewer-pdf" />
-          ) : doc.mimeType.startsWith('image/') ? (
-            <img src={previewUrl} alt={doc.originalName} className="viewer-image" />
+            <iframe title={doc.originalName || doc.title} src={previewUrl} className="viewer-pdf" />
+          ) : doc.mimeType?.startsWith('image/') ? (
+            <img src={previewUrl} alt={doc.originalName || doc.title} className="viewer-image" />
           ) : (
-            <iframe title={doc.originalName} src={previewUrl} className="viewer-text" />
+            <iframe title={doc.originalName || doc.title} src={previewUrl} className="viewer-text" />
           )}
         </div>
 
         <div className="viewer-footer">
-          <button className="btn btn-ghost" onClick={() => onDownload(doc)}>Download</button>
-          <button className="btn-danger" onClick={() => { onDelete(doc._id); onClose(); }}>Delete</button>
+          <button className="btn btn-ghost" onClick={handleDownload}>Download</button>
+          {onDelete && (
+            <button className="btn-danger" onClick={() => { onDelete(doc._id); onClose(); }}>Delete</button>
+          )}
+          <button className="btn btn-secondary" onClick={onClose}>Close</button>
         </div>
       </div>
     </div>

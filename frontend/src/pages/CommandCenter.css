@@ -1,0 +1,123 @@
+/* ==========================================================================
+   CommandCenter.css — Personal Operating System Execution Hub Styling
+   Strictly adheres to Life Vault design system:
+   - Crisp white cards #ffffff, border #e2e8f0, text #0f172a
+   - Indigo #4f46e5 / Cobalt #3b82f6 brand accents
+   - High-contrast typography & clean micro-animations
+   - Zero horizontal overflow on mobile
+   ========================================================================== */
+
+.command-page {
+  min-height: 100vh;
+  padding: 1.25rem 1rem 4rem 1rem;
+  max-width: 88rem;
+  margin: 0 auto;
+  color: #0f172a;
+}
+
+@media (min-width: 640px) {
+  .command-page {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+    padding-top: 1.75rem;
+  }
+}
+
+/* Elevated Surface Card */
+.cmd-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.cmd-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
+}
+
+/* Hero Active Runway Pulsing Glow */
+.cmd-active-glow {
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3), 0 10px 25px -5px rgba(16, 185, 129, 0.15);
+  border-color: #10b981 !important;
+  background: linear-gradient(to bottom right, #f0fdf4, #ffffff) !important;
+}
+
+/* Timeline Vertical Line */
+.cmd-timeline-stem {
+  position: relative;
+}
+
+.cmd-timeline-stem::before {
+  content: '';
+  position: absolute;
+  top: 1.25rem;
+  bottom: 1.25rem;
+  left: 1.75rem;
+  width: 2px;
+  background: #e2e8f0;
+  z-index: 0;
+}
+
+/* Modal Overlay and Container (matching main page light theme) */
+.frosted-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background-color: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  animation: cmdFadeIn 0.15s ease-out;
+}
+
+.frosted-modal-container {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1.25rem;
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25);
+  width: 100%;
+  overflow: hidden;
+  color: #0f172a;
+  animation: cmdPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes cmdFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes cmdPopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Scrollbars */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 9999px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

@@ -4,6 +4,7 @@ import PrivateRoute from './components/PrivateRoute';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import CommandCenter from './pages/CommandCenter';
 import Planner from './pages/Planner';
 import Notes from './pages/Notes';
 import DocumentVault from './pages/DocumentVault';
@@ -30,6 +31,7 @@ function App() {
         }
       >
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/command" element={<CommandCenter />} />
         <Route path="/vault" element={<DocumentVault />} />
         <Route path="/health" element={<Health />} />
         <Route path="/goals" element={<Goals />} />
@@ -40,6 +42,7 @@ function App() {
         <Route path="/family" element={<Family />} />
         <Route path="/memories" element={<Memories />} />
         <Route path="/life-ai" element={<LifeAI />} />
+        <Route path="/ai" element={<LifeAI />} />
         <Route path="/emergency" element={<Emergency />} />
         <Route path="/settings" element={<Settings />} />
       </Route>

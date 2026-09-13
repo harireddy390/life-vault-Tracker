@@ -13,9 +13,12 @@ const taskSchema = new mongoose.Schema({
   priority: { type: String, enum: ['low', 'medium', 'high'], default: 'medium' },
   dueDate: { type: String, default: null },
   active: { type: Boolean, default: true, index: true },
+  completed: { type: Boolean, default: false, index: true },
+  completedAt: { type: Date, default: null },
 }, { timestamps: true });
 
-// Compound index for high-performance user task queries
+// Compound indexes for high-performance user task queries
 taskSchema.index({ user: 1, active: 1 });
+taskSchema.index({ user: 1, completed: 1 });
 
 module.exports = mongoose.model('Task', taskSchema);

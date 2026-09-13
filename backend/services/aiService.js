@@ -236,8 +236,8 @@ async function streamGroq(messages, systemPrompt, onChunk) {
 
   const hasImages = messages.some((m) => (m.images && m.images.length > 0) || m.image);
   const model = sanitizeGroqModel(process.env.GROQ_MODEL, hasImages);
-  // Keep max_tokens within Groq OTPM limit for vision models
-  const maxTokens = hasImages ? 800 : 2048;
+  // Keep max_tokens within Groq OTPM limit for vision models (1024), give full 4096 for text
+  const maxTokens = hasImages ? 1024 : 4096;
 
   const controller = new AbortController();
   const connectTimeout = setTimeout(() => controller.abort(), 35_000);
@@ -396,7 +396,7 @@ async function streamAnthropic(messages, systemPrompt, onChunk) {
       },
       body: JSON.stringify({
         model,
-        max_tokens: 2048,
+        max_tokens: 4096,
         system: systemPrompt,
         stream: true,
         messages: formatAnthropicMessages(messages),

@@ -6,8 +6,9 @@ import GlobalFloatingTimer from '../components/GlobalFloatingTimer';
 import './AppLayout.css';
 
 const NAV_ITEMS = [
-  { to: '/dashboard', label: 'Dashboard', icon: '\u{1F4CA}' },
-  { to: '/vault', label: 'Vault', icon: '\u{1F5C2}\uFE0F' },
+  { to: '/dashboard', label: 'Dashboard', icon: '📊' },
+  { to: '/command', label: 'Command Center', icon: '⚡' },
+  { to: '/vault', label: 'Vault', icon: '🗂️' },
   { to: '/health', label: 'Health', icon: '\u{1F493}' },
   { to: '/goals', label: 'Goals', icon: '🎯' },
   { to: '/planner', label: 'Track Progress', icon: '🗓️' },

@@ -158,13 +158,12 @@ export default function FamilyDocumentModal({
               onDragLeave={() => setDragOver(false)}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
-              className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${
-                dragOver
+              className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${dragOver
                   ? 'border-indigo-500 bg-indigo-50/80'
                   : selectedFile
-                  ? 'border-emerald-500/50 bg-emerald-50/60'
-                  : 'border-slate-300 hover:border-slate-400 bg-slate-50/70 hover:bg-slate-100/60'
-              }`}
+                    ? 'border-emerald-500/50 bg-emerald-50/60'
+                    : 'border-slate-300 hover:border-slate-400 bg-slate-50/70 hover:bg-slate-100/60'
+                }`}
             >
               <input
                 type="file"
@@ -261,5 +260,4 @@ export default function FamilyDocumentModal({
       </div>
     </div>
   );
-});
 }
