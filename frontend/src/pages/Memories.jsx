@@ -185,7 +185,7 @@ export default function Memories() {
   );
 
   return (
-    <div className="memories-page bg-slate-50 min-h-screen">
+    <div className="memories-page bg-slate-50 min-h-full rounded-2xl">
       <Toast message={toast?.message} type={toast?.type} />
 
       {/* Throwback Banner: "On This Day" */}

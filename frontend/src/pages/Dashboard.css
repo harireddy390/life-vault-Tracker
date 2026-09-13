@@ -3,6 +3,15 @@
   justify-content: space-between;
   align-items: flex-end;
   margin-bottom: var(--space-6);
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+@media (max-width: 640px) {
+  .dash-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-3);
+  }
 }
 .dash-subtitle {
   color: var(--text-secondary);

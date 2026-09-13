@@ -1178,7 +1178,8 @@ h4.md-heading {
    ========================================================================= */
 @media (max-width: 820px) {
   .chat-container {
-    height: 76vh;
+    height: calc(100dvh - 13rem);
+    min-height: 420px;
   }
 
   .ai-sidebar {
