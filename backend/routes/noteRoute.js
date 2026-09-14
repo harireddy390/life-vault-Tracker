@@ -38,7 +38,13 @@ router.put('/:id', protect, async (req, res) => {
     if (note.user.toString() !== req.user.id) {
       return res.status(401).json({ message: 'User not authorized to update this note' });
     }
-    const updated = await Note.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const { title, content, pinned } = req.body;
+    const safeUpdates = {};
+    if (title !== undefined) safeUpdates.title = String(title);
+    if (content !== undefined) safeUpdates.content = String(content);
+    if (pinned !== undefined) safeUpdates.pinned = Boolean(pinned);
+
+    const updated = await Note.findByIdAndUpdate(req.params.id, safeUpdates, { new: true });
     res.status(200).json(updated);
   } catch (error) {
     res.status(500).json({ message: error.message });

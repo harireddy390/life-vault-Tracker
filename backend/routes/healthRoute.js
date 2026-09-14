@@ -4,6 +4,8 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const { protect } = require('../middleware/authMiddleware');
+const { escapeRegex } = require('../utils/securityUtils');
+const { validateUploadMagicBytes } = require('../config/upload');
 
 const MedicalProfile = require('../models/MedicalProfile');
 const EmergencyContact = require('../models/EmergencyContact');
@@ -262,7 +264,7 @@ router.post('/vitals', protect, async (req, res) => {
 // ─────────────────────────────────────────────
 
 // POST /api/health/records/upload
-router.post('/records/upload', protect, healthUpload.single('file'), async (req, res) => {
+router.post('/records/upload', protect, healthUpload.single('file'), validateUploadMagicBytes, async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: 'No file uploaded.' });
     const { title, category, doctorOrFacility, recordDate } = req.body;
@@ -294,7 +296,8 @@ router.get('/records', protect, async (req, res) => {
     const query = { user: req.user.id };
     if (req.query.category && req.query.category !== 'all') query.category = req.query.category;
     if (req.query.search) {
-      const re = new RegExp(req.query.search.trim(), 'i');
+      const safeSearch = escapeRegex(req.query.search.trim());
+      const re = new RegExp(safeSearch, 'i');
       query.$or = [{ title: re }, { doctorOrFacility: re }];
     }
     const records = await HealthRecord.find(query).sort({ recordDate: -1, createdAt: -1 });

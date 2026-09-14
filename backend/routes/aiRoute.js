@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const { protect } = require('../middleware/authMiddleware');
+const { validateUploadMagicBytes } = require('../config/upload');
 
 const Task = require('../models/tasks');
 const Goal = require('../models/goals');
@@ -19,6 +20,8 @@ const VitalsLog = require('../models/VitalsLog');
 const Conversation = require('../models/Conversation');
 const AIConversation = require('../models/AIConversation');
 const AIMessage = require('../models/AIMessage');
+const AIAttachment = require('../models/AIAttachment');
+const { aiLimiter, uploadLimiter } = require('../middleware/rateLimiter');
 
 const { formatDateKey, isTaskScheduledOnDate } = require('../services/streakService');
 const { getISTCurrentDateTime, getISTDateStr } = require('../utils/istTime');
@@ -646,7 +649,7 @@ router.delete('/conversations/:id', protect, async (req, res) => {
 
 // @route   POST /api/ai/upload
 // @desc    Upload file for AI analysis (up to 50MB, PDF, DOCX, TXT, CSV, JSON, images)
-router.post('/upload', protect, aiUpload.single('file'), async (req, res) => {
+router.post('/upload', protect, uploadLimiter, aiUpload.single('file'), validateUploadMagicBytes, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No file uploaded' });
@@ -669,7 +672,19 @@ router.post('/upload', protect, aiUpload.single('file'), async (req, res) => {
       }
     }
 
+    const attachment = await AIAttachment.create({
+      user: req.user.id,
+      storedName: filename,
+      originalName: originalname,
+      mimeType: mimetype,
+      size,
+      attachmentType,
+      extractedText,
+    });
+
     const payload = {
+      _id: attachment._id,
+      id: attachment._id,
       originalName: originalname,
       file_name: originalname,
       storedName: filename,
@@ -690,16 +705,33 @@ router.post('/upload', protect, aiUpload.single('file'), async (req, res) => {
 });
 
 // @route   GET /api/ai/attachments/:filename
-// @desc    Securely stream an uploaded attachment
-router.get('/attachments/:filename', protect, (req, res) => {
-  const safeFilename = path.basename(req.params.filename);
-  const filePath = path.join(uploadDir, safeFilename);
+// @desc    Securely stream an uploaded attachment with strict ownership check
+router.get('/attachments/:filename', protect, async (req, res) => {
+  try {
+    const safeFilename = path.basename(req.params.filename);
 
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ message: 'Attachment file not found' });
+    // CRITICAL IDOR PREVENTION: Verify attachment ownership in DB
+    const attachment = await AIAttachment.findOne({
+      storedName: safeFilename,
+      user: req.user.id,
+    });
+
+    if (!attachment) {
+      return res.status(404).json({ message: 'Attachment not found or access denied' });
+    }
+
+    const filePath = path.join(uploadDir, safeFilename);
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ message: 'Attachment file not found' });
+    }
+
+    res.setHeader('Content-Type', attachment.mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(attachment.originalName)}"`);
+    res.sendFile(filePath);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
-
-  res.sendFile(filePath);
 });
 
 // ==========================================
@@ -761,7 +793,7 @@ router.post('/tools/execute-confirmed', protect, async (req, res) => {
 
 // @route   POST /api/ai/chat
 // @desc    Agentic chat endpoint with multimodal vision, tool execution, and SSE streaming
-router.post('/chat', protect, async (req, res) => {
+router.post('/chat', protect, aiLimiter, async (req, res) => {
   const userId = req.user.id;
   const { conversationId, messages, attachments, includeContext, noteId } = req.body;
 
@@ -779,6 +811,24 @@ router.post('/chat', protect, async (req, res) => {
 
   if (pendingByUser.has(userId)) {
     return res.status(429).json({ success: false, error: 'Please wait for your previous request to finish.' });
+  }
+
+  // Pre-flight verify all attachments belong strictly to requesting user
+  if (Array.isArray(attachments) && attachments.length > 0) {
+    for (const att of attachments) {
+      const safeStoredName = path.basename(att.storedName || att.stored_name || '');
+      if (!safeStoredName) continue;
+      const verified = await AIAttachment.findOne({
+        storedName: safeStoredName,
+        user: userId,
+      });
+      if (!verified) {
+        return res.status(403).json({
+          success: false,
+          error: `Access Denied: Attachment ${safeStoredName} does not belong to your account.`,
+        });
+      }
+    }
   }
 
   // Find or create AIConversation
@@ -813,15 +863,29 @@ router.post('/chat', protect, async (req, res) => {
     const promptImages = [];
     let detectedVisionSchedule = null;
 
-    // Process attachments
+    // Process attachments with strict ownership verification
     if (Array.isArray(attachments) && attachments.length > 0) {
       for (const att of attachments) {
+        const safeStoredName = path.basename(att.storedName || att.stored_name || '');
+        if (!safeStoredName) continue;
+
+        // CRITICAL: Verify this attachment is strictly owned by the requesting user
+        const verifiedAttachment = await AIAttachment.findOne({
+          storedName: safeStoredName,
+          user: userId,
+        });
+
+        if (!verifiedAttachment) {
+          console.warn(`[Security Alert] Blocked cross-user attachment access attempt: User ${userId} tried reading ${safeStoredName}`);
+          continue; // Skip unauthorized file. User A's files NEVER enter User B's AI context!
+        }
+
         if (att.attachmentType === 'image') {
-          const filePath = path.join(uploadDir, path.basename(att.storedName || ''));
+          const filePath = path.join(uploadDir, safeStoredName);
           if (fs.existsSync(filePath)) {
             const base64 = readImageBase64(filePath);
             promptImages.push({
-              mediaType: att.mimeType || 'image/jpeg',
+              mediaType: verifiedAttachment.mimeType || att.mimeType || 'image/jpeg',
               data: base64,
             });
 
@@ -846,7 +910,7 @@ router.post('/chat', protect, async (req, res) => {
             }
           }
         } else if (att.attachmentType === 'document') {
-          attachedDocumentBlock += `\n\n=== ATTACHED DOCUMENT: ${att.originalName || att.file_name} (${att.mimeType || att.mime_type}) ===\n${att.extractedText || '[No readable text extracted]'}\n=== END OF DOCUMENT ===\n`;
+          attachedDocumentBlock += `\n\n=== ATTACHED DOCUMENT: ${verifiedAttachment.originalName} (${verifiedAttachment.mimeType}) ===\n${verifiedAttachment.extractedText || att.extractedText || '[No readable text extracted]'}\n=== END OF DOCUMENT ===\n`;
 
           // If document mentions timetable or routine
           const promptText = (lastUserMessage?.content || '').toLowerCase();

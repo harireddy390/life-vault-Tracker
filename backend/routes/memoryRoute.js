@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const Memory = require('../models/Memory');
 const { protect } = require('../middleware/authMiddleware');
+const { validateUploadMagicBytes } = require('../config/upload');
 
 // ─── Multer Storage for Memory Media ─────────────────────────────────────────
 const uploadDir = path.join(__dirname, '../uploads/memories');
@@ -293,7 +294,7 @@ router.get('/:id', protect, async (req, res) => {
 });
 
 // POST /api/memories (Multipart file upload up to 10 files)
-router.post('/', protect, upload.array('files', 10), async (req, res) => {
+router.post('/', protect, upload.array('files', 10), validateUploadMagicBytes, async (req, res) => {
   try {
     const {
       title,
@@ -447,7 +448,7 @@ router.delete('/:id', protect, async (req, res) => {
 });
 
 // POST /api/memories/:id/media (Attach additional files)
-router.post('/:id/media', protect, upload.array('files', 10), async (req, res) => {
+router.post('/:id/media', protect, upload.array('files', 10), validateUploadMagicBytes, async (req, res) => {
   try {
     const memory = await Memory.findById(req.params.id);
     if (!checkOwner(memory, req.user.id, res)) return;

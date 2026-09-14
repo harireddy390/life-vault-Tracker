@@ -2,6 +2,20 @@ import api from '../api/axiosConfig';
 
 const BASE = '/family';
 
+export const resolveFamilyUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('blob:') || url.startsWith('data:')) return url;
+  let fullUrl = url;
+  try {
+    const stored = localStorage.getItem('lifevault_user');
+    const token = stored ? JSON.parse(stored).token : null;
+    if (token && !fullUrl.includes('token=')) {
+      fullUrl += (fullUrl.includes('?') ? '&' : '?') + `token=${encodeURIComponent(token)}`;
+    }
+  } catch (e) {}
+  return fullUrl;
+};
+
 // ── Members ───────────────────────────────────────────────────────────────────
 export const getMembers = async () => (await api.get(`${BASE}/members`)).data;
 

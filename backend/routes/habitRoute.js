@@ -56,7 +56,18 @@ router.put('/:id', protect, async (req, res) => {
     // Editing keeps the same _id, so existing Progress records (which
     // reference this _id) stay correctly linked to their history — renaming
     // a task never disconnects it from past completions.
-    const updated = await Habit.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const allowedFields = [
+      'title', 'description', 'important', 'frequency', 'daysOfWeek',
+      'startDate', 'endDate', 'reminderTime', 'active'
+    ];
+    const safeUpdates = {};
+    for (const key of allowedFields) {
+      if (req.body[key] !== undefined) safeUpdates[key] = req.body[key];
+    }
+    delete safeUpdates.user;
+    delete safeUpdates._id;
+
+    const updated = await Habit.findByIdAndUpdate(req.params.id, safeUpdates, { new: true });
     res.status(200).json(updated);
   } catch (error) {
     res.status(500).json({ message: error.message });

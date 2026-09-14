@@ -16,6 +16,10 @@
 # IDE
 .vscode/
 
+# User Uploads
+uploads/
+**/uploads/
+
 # OS
 .DS_Store
 Thumbs.db

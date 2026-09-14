@@ -9,10 +9,20 @@ export const getMediaSrc = (mediaOrUrl) => {
     url = mediaOrUrl.file_url || (mediaOrUrl.storedName ? `/uploads/memories/${mediaOrUrl.storedName}` : '') || mediaOrUrl.url || '';
   }
   if (!url) return '';
-  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('blob:') || url.startsWith('data:')) {
+  if (url.startsWith('blob:') || url.startsWith('data:')) {
     return url;
   }
-  return url.startsWith('/') ? url : `/${url}`;
+  let finalUrl = url.startsWith('http://') || url.startsWith('https://') ? url : (url.startsWith('/') ? url : `/${url}`);
+  if (finalUrl.includes('/uploads/')) {
+    try {
+      const stored = localStorage.getItem('lifevault_user');
+      const token = stored ? JSON.parse(stored).token : null;
+      if (token && !finalUrl.includes('token=')) {
+        finalUrl += (finalUrl.includes('?') ? '&' : '?') + `token=${encodeURIComponent(token)}`;
+      }
+    } catch (e) {}
+  }
+  return finalUrl;
 };
 
 export const getMediaUrl = async (memoryId, mediaId) => {

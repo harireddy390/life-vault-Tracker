@@ -4,6 +4,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { protect } = require('../middleware/authMiddleware');
+const { escapeRegex, sanitizeCsvValue } = require('../utils/securityUtils');
+const { validateUploadMagicBytes } = require('../config/upload');
 
 const Transaction = require('../models/Transaction');
 const Budget = require('../models/Budget');
@@ -28,10 +30,10 @@ const upload = multer({
   fileFilter: (_req, file, cb) => {
     const allowed = ['.pdf', '.png', '.jpg', '.jpeg', '.webp'];
     const ext = path.extname(file.originalname).toLowerCase();
-    if (allowed.includes(ext) || file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf') {
-      return cb(null, true);
+    if (!allowed.includes(ext) || file.mimetype === 'image/svg+xml' || file.mimetype.includes('html')) {
+      return cb(new Error('Only PDF and standard image files (PNG, JPG, JPEG, WEBP) are allowed.'));
     }
-    cb(new Error('Only PDF and image files (PNG, JPG, JPEG, WEBP) are allowed'));
+    cb(null, true);
   },
 });
 
@@ -203,7 +205,7 @@ router.get('/transactions', protect, async (req, res) => {
     }
 
     if (search && search.trim()) {
-      const q = search.trim();
+      const q = escapeRegex(search.trim());
       query.$or = [
         { title: { $regex: q, $options: 'i' } },
         { notes: { $regex: q, $options: 'i' } },
@@ -238,7 +240,7 @@ router.get('/transactions', protect, async (req, res) => {
 });
 
 // ─── POST /api/finance/transactions ──────────────────────────────────────────
-router.post('/transactions', protect, upload.single('receipt'), async (req, res) => {
+router.post('/transactions', protect, upload.single('receipt'), validateUploadMagicBytes, async (req, res) => {
   try {
     const { title, amount, type, category, payment_method, transaction_date, notes } = req.body;
     if (!title) return res.status(400).json({ message: 'Title is required' });
@@ -291,7 +293,7 @@ router.post('/transactions', protect, upload.single('receipt'), async (req, res)
 });
 
 // ─── PUT /api/finance/transactions/:id ───────────────────────────────────────
-router.put('/transactions/:id', protect, upload.single('receipt'), async (req, res) => {
+router.put('/transactions/:id', protect, upload.single('receipt'), validateUploadMagicBytes, async (req, res) => {
   try {
     const transaction = await Transaction.findById(req.params.id);
     if (!ownerCheck(transaction, req.user.id, res)) return;
@@ -574,12 +576,12 @@ router.get('/export-csv', protect, async (req, res) => {
     const headers = ['Date', 'Title', 'Type', 'Category', 'Amount (INR)', 'Payment Method', 'Notes', 'Receipt Attached'];
     const rows = transactions.map((t) => [
       new Date(t.transaction_date).toISOString().split('T')[0],
-      `"${(t.title || '').replace(/"/g, '""')}"`,
-      t.type,
-      t.category,
+      sanitizeCsvValue(t.title),
+      sanitizeCsvValue(t.type),
+      sanitizeCsvValue(t.category),
       t.amount,
-      t.payment_method,
-      `"${(t.notes || '').replace(/"/g, '""')}"`,
+      sanitizeCsvValue(t.payment_method),
+      sanitizeCsvValue(t.notes),
       t.receipt_url ? 'Yes' : 'No',
     ]);
 

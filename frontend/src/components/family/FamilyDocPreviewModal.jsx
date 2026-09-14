@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Download, FileText, ExternalLink, ShieldCheck, AlertCircle } from 'lucide-react';
+import { resolveFamilyUrl } from '../../services/familyService';
 
 export default function FamilyDocPreviewModal({
   isOpen,
@@ -10,6 +11,7 @@ export default function FamilyDocPreviewModal({
 
   const isPdf = doc.mime_type?.includes('pdf') || doc.file_name?.toLowerCase().endsWith('.pdf');
   const isImage = doc.mime_type?.includes('image') || /\.(jpg|jpeg|png|webp)$/i.test(doc.file_name);
+  const secureUrl = resolveFamilyUrl(doc.file_url);
 
   return (
     <div className="frosted-modal-overlay">
@@ -24,8 +26,8 @@ export default function FamilyDocPreviewModal({
               <h3 className="text-sm font-bold text-slate-900 truncate max-w-md" title={doc.file_name}>
                 {doc.file_name}
               </h3>
-              <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500">
-                <span className="capitalize">{doc.document_type?.replace(/_/g, ' ')}</span>
+              <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                <span className="font-medium text-indigo-600">{doc.document_type?.replace(/_/g, ' ')}</span>
                 {doc.document_number && (
                   <>
                     <span>•</span>
@@ -38,7 +40,7 @@ export default function FamilyDocPreviewModal({
 
           <div className="flex items-center gap-2">
             <a
-              href={doc.file_url}
+              href={secureUrl}
               download={doc.file_name}
               target="_blank"
               rel="noreferrer"
@@ -60,14 +62,14 @@ export default function FamilyDocPreviewModal({
         <div className="flex-1 bg-slate-50 overflow-auto flex items-center justify-center p-4 relative">
           {isPdf ? (
             <iframe
-              src={doc.file_url}
+              src={secureUrl}
               title={doc.file_name}
               className="w-full h-full rounded-lg border border-slate-200 bg-white"
             />
           ) : isImage ? (
             <div className="max-w-full max-h-full flex items-center justify-center">
               <img
-                src={doc.file_url}
+                src={secureUrl}
                 alt={doc.file_name}
                 className="max-w-full max-h-[72vh] object-contain rounded-lg shadow-sm border border-slate-200 bg-white"
               />
@@ -80,7 +82,7 @@ export default function FamilyDocPreviewModal({
                 This file format cannot be displayed directly in the browser viewer.
               </p>
               <a
-                href={doc.file_url}
+                href={secureUrl}
                 download={doc.file_name}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-sm"
               >

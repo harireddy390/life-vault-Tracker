@@ -1,23 +1,30 @@
 const express = require('express');
 const router = express.Router();
 const Routine = require('../models/Routine');
+const { protect } = require('../middleware/authMiddleware');
 
 // Create a routine block
-router.post('/', async (req, res) => {
+router.post('/', protect, async (req, res) => {
   try {
-    const routine = await Routine.create(req.body);
+    const { title, startTime, endTime, tasks, daysOfWeek } = req.body;
+    const routine = await Routine.create({
+      title,
+      startTime,
+      endTime,
+      tasks,
+      daysOfWeek,
+      user: req.user.id,
+    });
     res.status(201).json(routine);
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
-// Get all routines for a user (query ?userId=...)
-router.get('/', async (req, res) => {
+// Get all routines for authenticated user
+router.get('/', protect, async (req, res) => {
   try {
-    const { userId } = req.query;
-    const filter = userId ? { user: userId } : {};
-    const routines = await Routine.find(filter).populate('tasks');
+    const routines = await Routine.find({ user: req.user.id }).populate('tasks');
     res.json(routines);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -25,9 +32,19 @@ router.get('/', async (req, res) => {
 });
 
 // Update a routine by id
-router.put('/:id', async (req, res) => {
+router.put('/:id', protect, async (req, res) => {
   try {
-    const routine = await Routine.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const routine = await Routine.findOne({ _id: req.params.id, user: req.user.id });
+    if (!routine) return res.status(404).json({ message: 'Routine not found' });
+
+    const { title, startTime, endTime, tasks, daysOfWeek } = req.body;
+    if (title !== undefined) routine.title = title;
+    if (startTime !== undefined) routine.startTime = startTime;
+    if (endTime !== undefined) routine.endTime = endTime;
+    if (tasks !== undefined) routine.tasks = tasks;
+    if (daysOfWeek !== undefined) routine.daysOfWeek = daysOfWeek;
+
+    await routine.save();
     res.json(routine);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -35,9 +52,10 @@ router.put('/:id', async (req, res) => {
 });
 
 // Delete a routine
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', protect, async (req, res) => {
   try {
-    await Routine.findByIdAndDelete(req.params.id);
+    const routine = await Routine.findOneAndDelete({ _id: req.params.id, user: req.user.id });
+    if (!routine) return res.status(404).json({ message: 'Routine not found' });
     res.json({ message: 'Routine deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });

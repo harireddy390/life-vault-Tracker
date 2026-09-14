@@ -17,7 +17,16 @@ router.post('/', protect, async (req, res) => {
     if (!req.body.title || req.body.amount == null) {
       return res.status(400).json({ message: 'Please add a description and amount' });
     }
-    const expense = await Expense.create({ ...req.body, user: req.user.id });
+    const { title, amount, category, type, date } = req.body;
+    const safeData = {
+      title: String(title).trim(),
+      amount: Number(amount),
+      category: category || 'other',
+      type: type || 'expense',
+      date: date || Date.now(),
+      user: req.user.id,
+    };
+    const expense = await Expense.create(safeData);
     res.status(201).json(expense);
   } catch (error) {
     res.status(500).json({ message: error.message });

@@ -19,10 +19,22 @@ import { API_URL } from '../../api/axiosConfig';
 
 export function resolveResourceUrl(url) {
   if (!url) return null;
-  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  if (url.startsWith('blob:') || url.startsWith('data:')) return url;
   const clean = url.replace(/\\/g, '/');
   const base = API_URL.replace(/\/api\/?$/, '');
-  return `${base}${clean.startsWith('/') ? '' : '/'}${clean}`;
+  let fullUrl = url.startsWith('http://') || url.startsWith('https://') 
+    ? url 
+    : `${base}${clean.startsWith('/') ? '' : '/'}${clean}`;
+
+  try {
+    const stored = localStorage.getItem('lifevault_user');
+    const token = stored ? JSON.parse(stored).token : null;
+    if (token && !fullUrl.includes('token=')) {
+      fullUrl += (fullUrl.includes('?') ? '&' : '?') + `token=${encodeURIComponent(token)}`;
+    }
+  } catch (e) {}
+
+  return fullUrl;
 }
 
 export default function DocumentViewerModal({ resource, onUpdateProgress, onClose }) {

@@ -4,6 +4,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { protect } = require('../middleware/authMiddleware');
+const { escapeRegex } = require('../utils/securityUtils');
+const { validateUploadMagicBytes } = require('../config/upload');
 
 const FamilyMember = require('../models/FamilyMember');
 const FamilyDocument = require('../models/FamilyDocument');
@@ -27,10 +29,10 @@ const upload = multer({
   fileFilter: (_req, file, cb) => {
     const allowed = ['.pdf', '.png', '.jpg', '.jpeg', '.webp'];
     const ext = path.extname(file.originalname).toLowerCase();
-    if (allowed.includes(ext) || file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf') {
-      return cb(null, true);
+    if (!allowed.includes(ext) || file.mimetype === 'image/svg+xml' || file.mimetype.includes('html')) {
+      return cb(new Error('Only PDF and standard image files (PNG, JPG, JPEG, WEBP) are allowed.'));
     }
-    cb(new Error('Only PDF and image files (PNG, JPG, JPEG, WEBP) are allowed'));
+    cb(null, true);
   },
 });
 
@@ -249,10 +251,11 @@ router.get('/documents', protect, async (req, res) => {
     if (memberId && memberId !== 'All') query.family_member = memberId;
     if (document_type && document_type !== 'All') query.document_type = document_type;
     if (search && search.trim()) {
+      const safeSearch = escapeRegex(search.trim());
       query.$or = [
-        { title: { $regex: search.trim(), $options: 'i' } },
-        { document_number: { $regex: search.trim(), $options: 'i' } },
-        { notes: { $regex: search.trim(), $options: 'i' } },
+        { title: { $regex: safeSearch, $options: 'i' } },
+        { document_number: { $regex: safeSearch, $options: 'i' } },
+        { notes: { $regex: safeSearch, $options: 'i' } },
       ];
     }
 
@@ -325,8 +328,8 @@ const uploadDocHandler = async (req, res) => {
   }
 };
 
-router.post('/members/:id/documents', protect, upload.single('file'), uploadDocHandler);
-router.post('/documents', protect, upload.single('file'), uploadDocHandler);
+router.post('/members/:id/documents', protect, upload.single('file'), validateUploadMagicBytes, uploadDocHandler);
+router.post('/documents', protect, upload.single('file'), validateUploadMagicBytes, uploadDocHandler);
 
 // DELETE /api/family/documents/:docId
 router.delete('/documents/:docId', protect, async (req, res) => {

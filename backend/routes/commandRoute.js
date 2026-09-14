@@ -421,7 +421,15 @@ router.put('/schedule/:id', protect, async (req, res) => {
     const block = await ScheduleBlock.findOne({ _id: req.params.id, user: req.user.id });
     if (!block) return res.status(404).json({ message: 'Schedule block not found' });
 
-    Object.assign(block, req.body);
+    const allowedFields = [
+      'title', 'description', 'startTime', 'endTime', 'daysOfWeek',
+      'isRecurring', 'date', 'category', 'priority'
+    ];
+    for (const key of allowedFields) {
+      if (req.body[key] !== undefined) {
+        block[key] = req.body[key];
+      }
+    }
     await block.save();
 
     res.json(block);

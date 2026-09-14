@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { protect } = require('../middleware/authMiddleware');
+const { validateUploadMagicBytes } = require('../config/upload');
 
 const LearningTopic = require('../models/LearningTopic');
 const StudyNote = require('../models/StudyNote');
@@ -476,7 +477,7 @@ router.post('/resources', protect, async (req, res) => {
 });
 
 // POST /api/learning/resources/upload  — create with file attachment
-router.post('/resources/upload', protect, upload.single('file'), async (req, res) => {
+router.post('/resources/upload', protect, upload.single('file'), validateUploadMagicBytes, async (req, res) => {
   try {
     const { title, resource_type, author, url, total_units, unit_label, cover_color, topic_id } = req.body;
     if (!title) return res.status(400).json({ message: 'Title is required' });

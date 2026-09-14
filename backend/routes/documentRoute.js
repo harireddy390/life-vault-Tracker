@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const Document = require('../models/documents');
 const { protect } = require('../middleware/authMiddleware');
-const { upload, uploadDir } = require('../config/upload');
+const { upload, uploadDir, validateUploadMagicBytes } = require('../config/upload');
 
 // @route   GET /api/documents
 router.get('/', protect, async (req, res) => {
@@ -18,7 +18,7 @@ router.get('/', protect, async (req, res) => {
 
 // @route   POST /api/documents
 // @desc    Upload a file (multipart/form-data, field name: "file")
-router.post('/', protect, upload.single('file'), async (req, res) => {
+router.post('/', protect, upload.single('file'), validateUploadMagicBytes, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No file uploaded' });

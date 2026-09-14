@@ -13,6 +13,7 @@ import {
   GraduationCap,
   FileBadge
 } from 'lucide-react';
+import { resolveFamilyUrl } from '../../services/familyService';
 
 const CATEGORIES = [
   { id: 'ALL', label: 'All', icon: FolderLock },
@@ -215,7 +216,7 @@ export default function FamilyDocumentVault({
                       <Eye className="w-3.5 h-3.5" />
                     </button>
                     <a
-                      href={doc.file_url}
+                      href={resolveFamilyUrl(doc.file_url)}
                       download={doc.file_name}
                       target="_blank"
                       rel="noreferrer"

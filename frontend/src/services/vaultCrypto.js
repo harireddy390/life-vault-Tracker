@@ -3,9 +3,22 @@ import axios from 'axios';
 const API_URL = '/api/vault/auth';
 const PBKDF2_ITERATIONS = 100000;
 
-// Store in memory for true zero-knowledge (cleared on reload/close)
-// SessionStorage is an alternative if we want it to survive reloads within the same tab
-let inMemoryMasterPassword = sessionStorage.getItem('vaultMasterPassword') || null;
+// Pure in-memory storage for zero-knowledge key material.
+// Master passwords are NEVER stored in sessionStorage, localStorage, cookies, or URLs.
+let inMemoryMasterPassword = null;
+
+// Defensive cleanup of any legacy keys from previous sessions
+try {
+  sessionStorage.removeItem('vaultMasterPassword');
+} catch (e) {}
+
+export function clearMasterPassword() {
+  inMemoryMasterPassword = null;
+  try {
+    sessionStorage.removeItem('vaultMasterPassword');
+    sessionStorage.removeItem('vaultToken');
+  } catch (e) {}
+}
 
 const getAuthHeaders = () => {
   // Read token from the same key that authService uses: 'lifevault_user'
@@ -119,7 +132,6 @@ export async function setMasterPassword(password) {
     });
     
     inMemoryMasterPassword = password;
-    sessionStorage.setItem('vaultMasterPassword', password);
     
     // Automatically verify to get the token
     await verifyMasterPassword(password);
@@ -136,7 +148,6 @@ export async function verifyMasterPassword(password) {
     });
     
     inMemoryMasterPassword = password;
-    sessionStorage.setItem('vaultMasterPassword', password);
     sessionStorage.setItem('vaultToken', response.data.vaultToken);
     
     return true;
@@ -201,6 +212,7 @@ export default {
   getMasterPassword,
   setMasterPassword,
   verifyMasterPassword,
+  clearMasterPassword,
   encryptBlob,
   decryptBlob,
 };

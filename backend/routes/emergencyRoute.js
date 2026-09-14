@@ -18,10 +18,23 @@ router.get('/', protect, async (req, res) => {
 
 router.put('/', protect, async (req, res) => {
   try {
+    const { bloodGroup, allergies, medicalNotes, contacts } = req.body;
+    const safeData = {};
+    if (bloodGroup !== undefined) safeData.bloodGroup = String(bloodGroup);
+    if (allergies !== undefined) safeData.allergies = String(allergies);
+    if (medicalNotes !== undefined) safeData.medicalNotes = String(medicalNotes);
+    if (Array.isArray(contacts)) {
+      safeData.contacts = contacts.map(c => ({
+        name: String(c.name || ''),
+        relation: String(c.relation || ''),
+        phone: String(c.phone || ''),
+      }));
+    }
+
     const profile = await Emergency.findOneAndUpdate(
       { user: req.user.id },
-      { ...req.body, user: req.user.id },
-      { new: true, upsert: true }
+      { $set: safeData },
+      { new: true, upsert: true, runValidators: true }
     );
     res.status(200).json(profile);
   } catch (error) {

@@ -7,7 +7,8 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Document = require('../models/documents');
 const { protect } = require('../middleware/authMiddleware');
-const { upload, uploadDir } = require('../config/upload');
+const { authLimiter, uploadLimiter } = require('../middleware/rateLimiter');
+const { upload, uploadDir, validateUploadMagicBytes } = require('../config/upload');
 
 const VAULT_QUOTA_BYTES = 10737418240; // 10 GB
 
@@ -37,7 +38,7 @@ router.post('/auth/setup', protect, async (req, res) => {
 
 // @route   POST /api/vault/auth/verify
 // @desc    Verify master vault password
-router.post('/auth/verify', protect, async (req, res) => {
+router.post('/auth/verify', protect, authLimiter, async (req, res) => {
   try {
     const { vaultPassword } = req.body;
     if (!vaultPassword) {
@@ -55,7 +56,11 @@ router.post('/auth/verify', protect, async (req, res) => {
     }
 
     // Generate a short-lived vault token
-    const vaultToken = jwt.sign({ id: req.user.id, vaultUnlocked: true }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    const vaultToken = jwt.sign(
+      { id: req.user.id, vaultUnlocked: true },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h', algorithm: 'HS256' }
+    );
 
     res.status(200).json({ vaultToken });
   } catch (error) {
@@ -81,9 +86,11 @@ const vaultProtect = (req, res, next) => {
     vaultToken = req.headers.authorization.split(' ')[1];
   }
 
-  // To allow hybrid requests, we accept the vaultToken in a custom header if Bearer is the main token
+  // To allow hybrid requests, we accept the vaultToken in a custom header or query param
   if (req.headers['x-vault-token']) {
     vaultToken = req.headers['x-vault-token'];
+  } else if (req.query && req.query.vaultToken) {
+    vaultToken = req.query.vaultToken;
   }
 
   if (!vaultToken) {
@@ -91,7 +98,7 @@ const vaultProtect = (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(vaultToken, process.env.JWT_SECRET);
+    const decoded = jwt.verify(vaultToken, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     if (!decoded.vaultUnlocked || decoded.id !== req.user.id) {
       return res.status(401).json({ message: 'Invalid vault token' });
     }
@@ -178,7 +185,7 @@ const sendFile = (doc, res) => {
 
 // @route   POST /api/vault/documents
 // @desc    Upload a file to vault
-router.post('/documents', protect, upload.single('file'), async (req, res) => {
+router.post('/documents', protect, uploadLimiter, upload.single('file'), validateUploadMagicBytes, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No file uploaded' });

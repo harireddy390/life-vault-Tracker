@@ -64,6 +64,15 @@ function MarkdownTable({ lines }) {
   );
 }
 
+function isSafeUrl(url) {
+  if (!url) return false;
+  const trimmed = url.trim();
+  if (/^(javascript|vbscript|data|file):/i.test(trimmed)) {
+    return false;
+  }
+  return /^(https?:\/\/|\/|#|mailto:|tel:)/i.test(trimmed);
+}
+
 export default function MarkdownLite({ text }) {
   if (!text) return null;
 
@@ -108,21 +117,27 @@ export default function MarkdownLite({ text }) {
         parts.push(<strong key={`${key}-${i++}`}>{token.slice(2, -2)}</strong>);
       } else if (token.startsWith('[')) {
         const linkMatch = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-        if (linkMatch) {
+        if (linkMatch && isSafeUrl(linkMatch[2])) {
           parts.push(
             <a key={`${key}-${i++}`} href={linkMatch[2]} target="_blank" rel="noopener noreferrer" className="md-link">
               {linkMatch[1]}
             </a>
           );
+        } else if (linkMatch) {
+          parts.push(<span key={`${key}-${i++}`} className="md-link-text">{linkMatch[1]}</span>);
         } else {
           parts.push(token);
         }
       } else if (token.startsWith('http')) {
-        parts.push(
-          <a key={`${key}-${i++}`} href={token} target="_blank" rel="noopener noreferrer" className="md-link">
-            {token}
-          </a>
-        );
+        if (isSafeUrl(token)) {
+          parts.push(
+            <a key={`${key}-${i++}`} href={token} target="_blank" rel="noopener noreferrer" className="md-link">
+              {token}
+            </a>
+          );
+        } else {
+          parts.push(token);
+        }
       } else {
         parts.push(<em key={`${key}-${i++}`}>{token.slice(1, -1)}</em>);
       }

@@ -103,12 +103,25 @@ router.put('/:id', protect, async (req, res) => {
       return res.status(401).json({ message: 'User not authorized to update this task' });
     }
 
-    const updates = { ...req.body };
-    if (updates.title && !updates.text) {
-      updates.text = updates.title;
+    const allowedFields = [
+      'text', 'title', 'description', 'important', 'frequency',
+      'daysOfWeek', 'startDate', 'endDate', 'reminderTime',
+      'priority', 'dueDate', 'active', 'completed'
+    ];
+    const safeUpdates = {};
+    for (const key of allowedFields) {
+      if (req.body[key] !== undefined) {
+        safeUpdates[key] = req.body[key];
+      }
     }
+    if (safeUpdates.title && !safeUpdates.text) {
+      safeUpdates.text = safeUpdates.title;
+    }
+    delete safeUpdates.title;
+    delete safeUpdates.user;
+    delete safeUpdates._id;
 
-    const updatedTask = await Task.findByIdAndUpdate(req.params.id, updates, {
+    const updatedTask = await Task.findByIdAndUpdate(req.params.id, safeUpdates, {
       new: true,
       runValidators: true,
     });

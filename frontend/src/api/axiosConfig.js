@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Change this if your backend runs on a different port
-export const API_URL = 'http://localhost:4003/api';
+// Environment-driven API base URL (VITE_API_URL or relative fallback)
+export const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 const api = axios.create({ baseURL: API_URL });
 

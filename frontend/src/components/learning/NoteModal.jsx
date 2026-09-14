@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Eye, Edit3, Hash, Copy, Check } from 'lucide-react';
+import DOMPurify from 'dompurify';
 import TagPill from './TagPill';
 
 const SUGGESTIONS = [
@@ -9,7 +10,7 @@ const SUGGESTIONS = [
 ];
 const LANGS = ['javascript', 'python', 'java', 'sql', 'go', 'typescript', 'bash', 'css', 'html', 'rust'];
 
-// Minimal but correct markdown → HTML (safe, no dangerouslySetInnerHTML XSS risk since user owns all content)
+// Secure markdown → HTML renderer with strict sanitization
 function renderMd(md) {
   if (!md) return '<p style="color:#94a3b8;font-style:italic">Nothing to preview yet…</p>';
 
@@ -24,6 +25,12 @@ function renderMd(md) {
     );
     return `%%CODE_BLOCK_${idx}%%`;
   });
+
+  // Escape raw HTML in content before processing markdown tokens
+  escaped = escaped
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 
   // Inline code
   escaped = escaped.replace(/`([^`]+)`/g, '<code class="lh-md-inline">$1</code>');
@@ -59,7 +66,14 @@ function renderMd(md) {
     escaped = escaped.replace(`%%CODE_BLOCK_${i}%%`, block);
   });
 
-  return escaped;
+  // Strict DOMPurify sanitization
+  return DOMPurify.sanitize(escaped, {
+    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'code', 'pre', 'div', 'span', 'a'],
+    ALLOWED_ATTR: ['class', 'style', 'href', 'target', 'rel'],
+    ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+    FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'input'],
+    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'data'],
+  });
 }
 
 export default function NoteModal({ note, roadmaps, onSave, onClose }) {

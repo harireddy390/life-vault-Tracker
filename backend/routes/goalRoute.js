@@ -7,7 +7,7 @@ const GoalMilestone = require('../models/GoalMilestone');
 const GoalAttachment = require('../models/GoalAttachment');
 const GoalCheckin = require('../models/GoalCheckin');
 const { protect } = require('../middleware/authMiddleware');
-const { upload, uploadDir } = require('../config/upload');
+const { upload, uploadDir, validateUploadMagicBytes } = require('../config/upload');
 
 // Map legacy / lowercase categories to canonical enum
 const normalizeCategory = (cat) => {
@@ -481,7 +481,7 @@ router.delete('/milestones/:milestoneId', protect, async (req, res) => {
 // @route   POST /api/goals/:id/attachments
 // @desc    Upload proof/certificate (PDF, PNG, JPG up to 50MB)
 // ============================================================================
-router.post('/:id/attachments', protect, upload.single('file'), async (req, res) => {
+router.post('/:id/attachments', protect, upload.single('file'), validateUploadMagicBytes, async (req, res) => {
   try {
     const goal = await Goal.findById(req.params.id);
     if (!goal) return res.status(404).json({ message: 'Goal not found' });
