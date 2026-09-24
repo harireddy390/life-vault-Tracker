@@ -7,6 +7,13 @@ const { protect } = require('../middleware/authMiddleware');
 const { escapeRegex } = require('../utils/securityUtils');
 const { validateUploadMagicBytes } = require('../config/upload');
 
+const {
+  uploadBufferToGridFS,
+  findGridFSFile,
+  deleteFromGridFS,
+  streamGridFSFile,
+} = require('../services/gridfsService');
+
 const MedicalProfile = require('../models/MedicalProfile');
 const EmergencyContact = require('../models/EmergencyContact');
 const Medication = require('../models/Medication');
@@ -14,25 +21,23 @@ const VitalsLog = require('../models/VitalsLog');
 const HealthRecord = require('../models/HealthRecord');
 
 // ─────────────────────────────────────────────
-// Health-record upload directory (separate from vault)
+// Health-record upload directory (GridFS memoryStorage)
 // ─────────────────────────────────────────────
 const healthUploadDir = path.join(__dirname, '..', 'uploads', 'health');
 if (!fs.existsSync(healthUploadDir)) fs.mkdirSync(healthUploadDir, { recursive: true });
 
 const ALLOWED_MIMES = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
 
-const healthStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, healthUploadDir),
-  filename: (req, file, cb) => {
-    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`;
-    cb(null, uniqueName);
-  },
-});
+const healthStorage = multer.memoryStorage();
 
 const healthUpload = multer({
   storage: healthStorage,
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
+    if (!file.filename && file.originalname) {
+      const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`;
+      file.filename = uniqueName;
+    }
     if (ALLOWED_MIMES.includes(file.mimetype)) {
       cb(null, true);
     } else {
@@ -270,22 +275,31 @@ router.post('/records/upload', protect, healthUpload.single('file'), validateUpl
     const { title, category, doctorOrFacility, recordDate } = req.body;
     if (!title) return res.status(400).json({ message: 'title is required.' });
 
+    const filename = req.file.filename;
+
+    await uploadBufferToGridFS(`health/${filename}`, req.file.buffer, {
+      contentType: req.file.mimetype,
+      metadata: {
+        originalName: req.file.originalname,
+        user: req.user.id,
+        subfolder: 'health',
+      },
+    });
+
     const record = await HealthRecord.create({
       user: req.user.id,
       title: title.trim(),
       category: category || 'other',
       doctorOrFacility: doctorOrFacility ? doctorOrFacility.trim() : '',
       recordDate: recordDate ? new Date(recordDate) : new Date(),
-      filePath: req.file.path,
-      fileName: req.file.filename,
+      filePath: `/uploads/health/${filename}`,
+      fileName: filename,
       originalName: req.file.originalname,
       fileSizeBytes: req.file.size,
       mimeType: req.file.mimetype,
     });
     res.status(201).json(record);
   } catch (err) {
-    // Cleanup uploaded file on DB error
-    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     res.status(500).json({ message: err.message });
   }
 });
@@ -313,11 +327,32 @@ router.get('/records/:id/download', protect, async (req, res) => {
     const record = await HealthRecord.findById(req.params.id);
     if (!record) return res.status(404).json({ message: 'Record not found.' });
     if (record.user.toString() !== req.user.id) return res.status(403).json({ message: 'Forbidden.' });
-    if (!fs.existsSync(record.filePath)) return res.status(404).json({ message: 'File missing from storage.' });
 
-    res.setHeader('Content-Type', record.mimeType);
-    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(record.originalName)}"`);
-    res.sendFile(record.filePath);
+    // 1. GridFS stream
+    const gridFile = await findGridFSFile(`health/${record.fileName}`) || await findGridFSFile(record.fileName);
+    if (gridFile) {
+      return streamGridFSFile(gridFile, req, res, {
+        filename: record.originalName,
+        contentType: record.mimeType || gridFile.contentType,
+        disposition: 'inline',
+      });
+    }
+
+    // 2. Disk fallback
+    if (record.filePath && fs.existsSync(record.filePath)) {
+      res.setHeader('Content-Type', record.mimeType);
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(record.originalName)}"`);
+      return res.sendFile(record.filePath);
+    }
+
+    const legacyDiskPath = path.join(healthUploadDir, record.fileName);
+    if (fs.existsSync(legacyDiskPath)) {
+      res.setHeader('Content-Type', record.mimeType);
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(record.originalName)}"`);
+      return res.sendFile(legacyDiskPath);
+    }
+
+    return res.status(404).json({ message: 'File missing from storage.' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -330,10 +365,19 @@ router.delete('/records/:id', protect, async (req, res) => {
     if (!record) return res.status(404).json({ message: 'Record not found.' });
     if (record.user.toString() !== req.user.id) return res.status(403).json({ message: 'Forbidden.' });
 
-    // Delete physical file
-    if (fs.existsSync(record.filePath)) {
-      fs.unlinkSync(record.filePath);
+    // Delete from GridFS
+    await deleteFromGridFS(`health/${record.fileName}`);
+    await deleteFromGridFS(record.fileName);
+
+    // Delete physical file if present on disk
+    if (record.filePath && fs.existsSync(record.filePath)) {
+      try { fs.unlinkSync(record.filePath); } catch (_) {}
     }
+    const legacyDiskPath = path.join(healthUploadDir, record.fileName);
+    if (fs.existsSync(legacyDiskPath)) {
+      try { fs.unlinkSync(legacyDiskPath); } catch (_) {}
+    }
+
     await record.deleteOne();
     res.json({ message: 'Health record deleted.' });
   } catch (err) {

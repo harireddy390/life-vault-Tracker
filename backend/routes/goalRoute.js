@@ -8,6 +8,7 @@ const GoalAttachment = require('../models/GoalAttachment');
 const GoalCheckin = require('../models/GoalCheckin');
 const { protect } = require('../middleware/authMiddleware');
 const { upload, uploadDir, validateUploadMagicBytes } = require('../config/upload');
+const { uploadBufferToGridFS, findGridFSFile, streamGridFSFile, deleteFromGridFS } = require('../services/gridfsService');
 
 // Map legacy / lowercase categories to canonical enum
 const normalizeCategory = (cat) => {
@@ -493,6 +494,17 @@ router.post('/:id/attachments', protect, upload.single('file'), validateUploadMa
       return res.status(400).json({ message: 'No proof file uploaded' });
     }
 
+    await uploadBufferToGridFS(req.file.filename, req.file.buffer, {
+      contentType: req.file.mimetype,
+      metadata: {
+        userId: req.user.id,
+        originalName: req.file.originalname,
+        storedName: req.file.filename,
+        goalId: goal._id.toString(),
+        fileSize: req.file.size
+      }
+    });
+
     const attachment = await GoalAttachment.create({
       goal_id: goal._id,
       user: req.user.id,
@@ -532,6 +544,13 @@ router.get('/:id/attachments/:attachmentId/download', protect, async (req, res) 
       return res.status(401).json({ message: 'Not authorized to download this file' });
     }
 
+    // Try GridFS first
+    const gridFile = await findGridFSFile(attachment.stored_name);
+    if (gridFile) {
+      return streamGridFSFile(gridFile, req, res, { downloadName: attachment.file_name });
+    }
+
+    // Fallback to disk
     const filePath = path.join(uploadDir, attachment.stored_name);
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ message: 'File missing from storage' });
@@ -557,6 +576,11 @@ router.delete('/attachments/:attachmentId', protect, async (req, res) => {
     }
 
     const goalId = attachment.goal_id;
+
+    // Delete from GridFS
+    await deleteFromGridFS(attachment.stored_name).catch(() => {});
+
+    // Also remove from disk if present
     const filePath = path.join(uploadDir, attachment.stored_name);
     if (fs.existsSync(filePath)) {
       try {
@@ -600,9 +624,10 @@ router.delete('/:id', protect, async (req, res) => {
 
     const goalId = goal._id;
 
-    // 1. Find all attachments and delete files on disk
+    // 1. Find all attachments and delete from GridFS & disk
     const attachments = await GoalAttachment.find({ goal_id: goalId });
-    attachments.forEach((att) => {
+    for (const att of attachments) {
+      await deleteFromGridFS(att.stored_name).catch(() => {});
       const filePath = path.join(uploadDir, att.stored_name);
       if (fs.existsSync(filePath)) {
         try {
@@ -611,7 +636,7 @@ router.delete('/:id', protect, async (req, res) => {
           console.warn('Failed to delete file on disk:', err.message);
         }
       }
-    });
+    }
 
     // 2. Cascade delete all child collections in DB
     await Promise.all([

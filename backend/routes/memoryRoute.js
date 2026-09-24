@@ -7,22 +7,27 @@ const Memory = require('../models/Memory');
 const { protect } = require('../middleware/authMiddleware');
 const { validateUploadMagicBytes } = require('../config/upload');
 
-// ─── Multer Storage for Memory Media ─────────────────────────────────────────
+const {
+  uploadBufferToGridFS,
+  findGridFSFile,
+  deleteFromGridFS,
+  streamGridFSFile,
+} = require('../services/gridfsService');
+
+// ─── Multer Storage for Memory Media (GridFS memoryStorage) ─────────────────
 const uploadDir = path.join(__dirname, '../uploads/memories');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
-  filename: (_req, file, cb) => {
-    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, unique + path.extname(file.originalname).toLowerCase());
-  },
-});
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
   limits: { fileSize: 52428800 }, // 50 MB
   fileFilter: (_req, file, cb) => {
+    if (!file.filename && file.originalname) {
+      const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+      file.filename = unique + path.extname(file.originalname).toLowerCase();
+    }
     const allowed = [
       // Images
       '.jpg', '.jpeg', '.png', '.webp', '.gif',
@@ -329,18 +334,31 @@ router.post('/', protect, upload.array('files', 10), validateUploadMagicBytes, a
       }
     }
 
-    // Process uploaded files
-    const mediaList = (req.files || []).map((file) => {
-      const ext = path.extname(file.originalname).toLowerCase();
-      const media_type = detectMediaType(file.mimetype, ext);
-      return {
-        media_type,
-        file_url: `/uploads/memories/${file.filename}`,
-        file_name: file.originalname,
-        file_size_bytes: file.size,
-        mime_type: file.mimetype,
-      };
-    });
+    // Process uploaded files and stream directly to GridFS
+    const mediaList = await Promise.all(
+      (req.files || []).map(async (file) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        const media_type = detectMediaType(file.mimetype, ext);
+        const filename = file.filename;
+
+        await uploadBufferToGridFS(`memories/${filename}`, file.buffer, {
+          contentType: file.mimetype,
+          metadata: {
+            originalName: file.originalname,
+            user: req.user.id,
+            subfolder: 'memories',
+          },
+        });
+
+        return {
+          media_type,
+          file_url: `/uploads/memories/${filename}`,
+          file_name: file.originalname,
+          file_size_bytes: file.size,
+          mime_type: file.mimetype,
+        };
+      })
+    );
 
     const memory = await Memory.create({
       user: req.user.id,
@@ -430,15 +448,20 @@ router.delete('/:id', protect, async (req, res) => {
     const memory = await Memory.findById(req.params.id);
     if (!checkOwner(memory, req.user.id, res)) return;
 
-    // Delete attached physical media files
-    (memory.media || []).forEach((m) => {
+    // Delete attached media files from GridFS and disk
+    for (const m of (memory.media || [])) {
+      const filename = m.storedName || (m.file_url ? path.basename(m.file_url) : '');
+      if (filename) {
+        await deleteFromGridFS(`memories/${filename}`);
+        await deleteFromGridFS(filename);
+      }
       if (m.file_url) {
         const filePath = path.join(__dirname, '..', m.file_url.replace(/^[/\\]+/, ''));
         if (fs.existsSync(filePath)) {
-          try { fs.unlinkSync(filePath); } catch (e) { console.error('Error unlinking media:', e); }
+          try { fs.unlinkSync(filePath); } catch (e) {}
         }
       }
-    });
+    }
 
     await memory.deleteOne();
     res.json({ id: req.params.id, message: 'Memory deleted successfully' });
@@ -457,17 +480,30 @@ router.post('/:id/media', protect, upload.array('files', 10), validateUploadMagi
       return res.status(400).json({ message: 'No media files provided' });
     }
 
-    const newMedia = req.files.map((file) => {
-      const ext = path.extname(file.originalname).toLowerCase();
-      const media_type = detectMediaType(file.mimetype, ext);
-      return {
-        media_type,
-        file_url: `/uploads/memories/${file.filename}`,
-        file_name: file.originalname,
-        file_size_bytes: file.size,
-        mime_type: file.mimetype,
-      };
-    });
+    const newMedia = await Promise.all(
+      req.files.map(async (file) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        const media_type = detectMediaType(file.mimetype, ext);
+        const filename = file.filename;
+
+        await uploadBufferToGridFS(`memories/${filename}`, file.buffer, {
+          contentType: file.mimetype,
+          metadata: {
+            originalName: file.originalname,
+            user: req.user.id,
+            subfolder: 'memories',
+          },
+        });
+
+        return {
+          media_type,
+          file_url: `/uploads/memories/${filename}`,
+          file_name: file.originalname,
+          file_size_bytes: file.size,
+          mime_type: file.mimetype,
+        };
+      })
+    );
 
     memory.media = [...(memory.media || []), ...newMedia];
     await memory.save();
@@ -478,7 +514,7 @@ router.post('/:id/media', protect, upload.array('files', 10), validateUploadMagi
   }
 });
 
-// GET /api/memories/:id/media/:mediaId (Stream media file for backward compatibility)
+// GET /api/memories/:id/media/:mediaId (Stream media file with range support)
 router.get('/:id/media/:mediaId', protect, async (req, res) => {
   try {
     const memory = await Memory.findById(req.params.id);
@@ -492,6 +528,18 @@ router.get('/:id/media/:mediaId', protect, async (req, res) => {
     }
 
     const filename = mediaItem.storedName || (mediaItem.file_url ? path.basename(mediaItem.file_url) : '');
+
+    // 1. GridFS stream with Range support
+    const gridFile = await findGridFSFile(`memories/${filename}`) || await findGridFSFile(filename);
+    if (gridFile) {
+      return streamGridFSFile(gridFile, req, res, {
+        filename: mediaItem.file_name || filename,
+        contentType: mediaItem.mime_type || gridFile.contentType,
+        disposition: 'inline',
+      });
+    }
+
+    // 2. Disk fallback
     const filePath = path.join(__dirname, '..', 'uploads', 'memories', filename);
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ message: 'Media file not found on disk' });
@@ -514,11 +562,17 @@ router.delete('/:id/media/:mediaId', protect, async (req, res) => {
       return res.status(404).json({ message: 'Media attachment not found' });
     }
 
-    // Unlink physical file
+    const filename = mediaItem.storedName || (mediaItem.file_url ? path.basename(mediaItem.file_url) : '');
+    if (filename) {
+      await deleteFromGridFS(`memories/${filename}`);
+      await deleteFromGridFS(filename);
+    }
+
+    // Unlink physical file if present
     if (mediaItem.file_url) {
       const filePath = path.join(__dirname, '..', mediaItem.file_url.replace(/^[/\\]+/, ''));
       if (fs.existsSync(filePath)) {
-        try { fs.unlinkSync(filePath); } catch (e) { console.error('Error unlinking media item:', e); }
+        try { fs.unlinkSync(filePath); } catch (e) {}
       }
     }
 

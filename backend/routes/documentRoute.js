@@ -5,6 +5,12 @@ const fs = require('fs');
 const Document = require('../models/documents');
 const { protect } = require('../middleware/authMiddleware');
 const { upload, uploadDir, validateUploadMagicBytes } = require('../config/upload');
+const {
+  uploadBufferToGridFS,
+  findGridFSFile,
+  deleteFromGridFS,
+  streamGridFSFile,
+} = require('../services/gridfsService');
 
 // @route   GET /api/documents
 router.get('/', protect, async (req, res) => {
@@ -24,10 +30,22 @@ router.post('/', protect, upload.single('file'), validateUploadMagicBytes, async
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
+    const storedName = req.file.filename;
+
+    // Stream directly to MongoDB GridFS
+    await uploadBufferToGridFS(storedName, req.file.buffer, {
+      contentType: req.file.mimetype,
+      metadata: {
+        originalName: req.file.originalname,
+        user: req.user.id,
+        category: 'documents',
+      },
+    });
+
     const doc = await Document.create({
       user: req.user.id,
       originalName: req.file.originalname,
-      storedName: req.file.filename,
+      storedName,
       mimeType: req.file.mimetype,
       size: req.file.size,
     });
@@ -47,12 +65,23 @@ router.get('/:id/download', protect, async (req, res) => {
       return res.status(401).json({ message: 'User not authorized to access this file' });
     }
 
-    const filePath = path.join(uploadDir, doc.storedName);
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ message: 'File missing from storage' });
+    // 1. Try GridFS
+    const gridFile = await findGridFSFile(doc.storedName);
+    if (gridFile) {
+      return streamGridFSFile(gridFile, req, res, {
+        filename: doc.originalName,
+        disposition: 'attachment',
+        contentType: doc.mimeType || gridFile.contentType,
+      });
     }
 
-    res.download(filePath, doc.originalName);
+    // 2. Disk fallback
+    const filePath = path.join(uploadDir, doc.storedName);
+    if (fs.existsSync(filePath)) {
+      return res.download(filePath, doc.originalName);
+    }
+
+    return res.status(404).json({ message: 'File missing from storage' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -67,9 +96,15 @@ router.delete('/:id', protect, async (req, res) => {
       return res.status(401).json({ message: 'User not authorized to delete this file' });
     }
 
+    // Delete from GridFS
+    await deleteFromGridFS(doc.storedName);
+
+    // Clean up disk if file exists locally
     const filePath = path.join(uploadDir, doc.storedName);
     if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+      try {
+        fs.unlinkSync(filePath);
+      } catch (_) {}
     }
 
     await doc.deleteOne();

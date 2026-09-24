@@ -10,13 +10,8 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  },
-});
+// Production GridFS storage uses memoryStorage
+const storage = multer.memoryStorage();
 
 const ALLOWED_MEDIA_EXTS = [
   '.jpg', '.jpeg', '.png', '.webp', '.gif',
@@ -43,10 +38,22 @@ const rawMediaUpload = multer({
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB — enough for short phone videos
 });
 
+function assignMediaFileMetadata(file) {
+  if (file && !file.filename && file.originalname) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    file.filename = uniqueSuffix + path.extname(file.originalname).toLowerCase();
+  }
+}
+
 function wrapMedia(fn) {
   return (req, res, next) => {
     fn(req, res, (err) => {
       if (err) return res.status(400).json({ message: err.message || 'File upload error.' });
+      if (req.file) assignMediaFileMetadata(req.file);
+      if (Array.isArray(req.files)) req.files.forEach(assignMediaFileMetadata);
+      if (req.files && typeof req.files === 'object') {
+        Object.values(req.files).flat().forEach(assignMediaFileMetadata);
+      }
       validateUploadMagicBytes(req, res, next);
     });
   };

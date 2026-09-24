@@ -12,17 +12,10 @@ const FlashcardDeck = require('../models/FlashcardDeck');
 const Flashcard = require('../models/Flashcard');
 const LearningResource = require('../models/LearningResource');
 
-// ─── Multer config for resource file uploads ──────────────────────────────────
-const uploadDir = path.join(__dirname, '../uploads/learning');
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+const { uploadBufferToGridFS, deleteFromGridFS } = require('../services/gridfsService');
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
-  filename: (_req, file, cb) => {
-    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, unique + path.extname(file.originalname));
-  },
-});
+// ─── Multer config for resource file uploads ──────────────────────────────────
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
@@ -34,6 +27,17 @@ const upload = multer({
     cb(new Error('Only PDF and image files are allowed'));
   },
 });
+
+function wrapLearningUpload(req, res, next) {
+  upload.single('file')(req, res, (err) => {
+    if (err) return res.status(400).json({ message: err.message });
+    if (req.file) {
+      const ext = path.extname(req.file.originalname);
+      req.file.filename = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+    }
+    next();
+  });
+}
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 function ownerCheck(doc, userId, res) {
@@ -477,7 +481,7 @@ router.post('/resources', protect, async (req, res) => {
 });
 
 // POST /api/learning/resources/upload  — create with file attachment
-router.post('/resources/upload', protect, upload.single('file'), validateUploadMagicBytes, async (req, res) => {
+router.post('/resources/upload', protect, wrapLearningUpload, validateUploadMagicBytes, async (req, res) => {
   try {
     const { title, resource_type, author, url, total_units, unit_label, cover_color, topic_id } = req.body;
     if (!title) return res.status(400).json({ message: 'Title is required' });
@@ -487,9 +491,21 @@ router.post('/resources/upload', protect, upload.single('file'), validateUploadM
     let file_size_bytes = null;
 
     if (req.file) {
-      file_url = `/uploads/learning/${req.file.filename}`;
+      const filename = req.file.filename;
+      file_url = `/uploads/learning/${filename}`;
       file_name = req.file.originalname;
       file_size_bytes = req.file.size;
+
+      await uploadBufferToGridFS(`learning/${filename}`, req.file.buffer, {
+        contentType: req.file.mimetype,
+        metadata: {
+          userId: req.user.id,
+          originalName: req.file.originalname,
+          storedName: filename,
+          subfolder: 'learning',
+          fileSize: req.file.size
+        }
+      });
     }
 
     const resource = await LearningResource.create({
@@ -547,11 +563,17 @@ router.delete('/resources/:id', protect, async (req, res) => {
     const resource = await LearningResource.findById(req.params.id);
     if (!ownerCheck(resource, req.user.id, res)) return;
 
-    // Remove physical file if present
+    // Remove from GridFS and physical file if present
     if (resource.file_url) {
       const cleanRel = resource.file_url.replace(/^[/\\]+/, '');
+      const basename = path.basename(cleanRel);
+      await deleteFromGridFS(`learning/${basename}`).catch(() => {});
+      await deleteFromGridFS(basename).catch(() => {});
+
       const filePath = path.join(__dirname, '..', cleanRel);
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      if (fs.existsSync(filePath)) {
+        try { fs.unlinkSync(filePath); } catch (e) {}
+      }
     }
     await resource.deleteOne();
     res.json({ id: req.params.id });

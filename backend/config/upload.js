@@ -8,16 +8,8 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    // Randomize the stored filename so two uploads of "resume.pdf" never collide
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  },
-});
+// Production GridFS storage uses memoryStorage so buffers stream directly to MongoDB
+const storage = multer.memoryStorage();
 
 // Strict allowlist: PDFs, office docs, plaintext, images. Block SVG, HTML, scripts, and executables.
 const ALLOWED_EXTENSIONS = [
@@ -396,11 +388,23 @@ const multerInstance = multer({
   limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB per file
 });
 
+function assignFileMetadata(file) {
+  if (file && !file.filename && file.originalname) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    file.filename = uniqueSuffix + path.extname(file.originalname);
+  }
+}
+
 function wrapMulter(fn) {
   return (req, res, next) => {
     fn(req, res, (err) => {
       if (err) {
         return res.status(400).json({ message: err.message || 'File upload error.' });
+      }
+      if (req.file) assignFileMetadata(req.file);
+      if (Array.isArray(req.files)) req.files.forEach(assignFileMetadata);
+      if (req.files && typeof req.files === 'object') {
+        Object.values(req.files).flat().forEach(assignFileMetadata);
       }
       const errorMsg = validateReqFiles(req);
       if (errorMsg) {

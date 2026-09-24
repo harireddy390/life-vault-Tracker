@@ -6,25 +6,28 @@ const mammoth = require('mammoth');
 const MAX_EXTRACTED_CHARS = 12000;
 
 /**
- * Extracts clean readable text from a file stored on disk.
+ * Extracts clean readable text from a file stored on disk or in-memory Buffer.
  * Supports PDF, DOCX, TXT, CSV, JSON, MD.
  * Returns { success, text, summary, charCount, truncated }
  */
-async function extractDocumentContent(filePath, originalName, mimeType) {
+async function extractDocumentContent(filePathOrBuffer, originalName, mimeType) {
   const ext = path.extname(originalName).toLowerCase();
 
   try {
     let rawText = '';
+    const isBuffer = Buffer.isBuffer(filePathOrBuffer);
 
     if (ext === '.pdf' || mimeType === 'application/pdf') {
-      const dataBuffer = fs.readFileSync(filePath);
+      const dataBuffer = isBuffer ? filePathOrBuffer : fs.readFileSync(filePathOrBuffer);
       const parsed = await pdfParse(dataBuffer);
       rawText = parsed.text || '';
     } else if (
       ext === '.docx' ||
       mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     ) {
-      const result = await mammoth.extractRawText({ path: filePath });
+      const result = isBuffer
+        ? await mammoth.extractRawText({ buffer: filePathOrBuffer })
+        : await mammoth.extractRawText({ path: filePathOrBuffer });
       rawText = result.value || '';
     } else if (
       ext === '.txt' ||
@@ -34,7 +37,7 @@ async function extractDocumentContent(filePath, originalName, mimeType) {
       mimeType.startsWith('text/') ||
       mimeType === 'application/json'
     ) {
-      rawText = fs.readFileSync(filePath, 'utf-8');
+      rawText = isBuffer ? filePathOrBuffer.toString('utf-8') : fs.readFileSync(filePathOrBuffer, 'utf-8');
     } else {
       return {
         success: false,
@@ -93,8 +96,11 @@ function isImageFile(mimeType, originalName) {
 /**
  * Reads an image file into base64 string
  */
-function readImageBase64(filePath) {
-  const buffer = fs.readFileSync(filePath);
+function readImageBase64(filePathOrBuffer) {
+  if (Buffer.isBuffer(filePathOrBuffer)) {
+    return filePathOrBuffer.toString('base64');
+  }
+  const buffer = fs.readFileSync(filePathOrBuffer);
   return buffer.toString('base64');
 }
 

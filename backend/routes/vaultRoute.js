@@ -9,6 +9,12 @@ const Document = require('../models/documents');
 const { protect } = require('../middleware/authMiddleware');
 const { authLimiter, uploadLimiter } = require('../middleware/rateLimiter');
 const { upload, uploadDir, validateUploadMagicBytes } = require('../config/upload');
+const {
+  uploadBufferToGridFS,
+  findGridFSFile,
+  deleteFromGridFS,
+  streamGridFSFile,
+} = require('../services/gridfsService');
 
 const VAULT_QUOTA_BYTES = 10737418240; // 10 GB
 
@@ -160,10 +166,10 @@ router.get('/documents/:id/download', protect, async (req, res) => {
     // If encrypted, require vault token
     if (doc.isEncrypted) {
       vaultProtect(req, res, () => {
-        sendFile(doc, res);
+        sendFile(doc, req, res);
       });
     } else {
-      sendFile(doc, res);
+      sendFile(doc, req, res);
     }
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -172,7 +178,18 @@ router.get('/documents/:id/download', protect, async (req, res) => {
 
 const mime = require('mime-types');
 
-const sendFile = (doc, res) => {
+const sendFile = async (doc, req, res) => {
+  // 1. Primary storage: GridFS
+  const gridFile = await findGridFSFile(doc.storedName);
+  if (gridFile) {
+    return streamGridFSFile(gridFile, req, res, {
+      filename: doc.originalName,
+      contentType: doc.mimeType || gridFile.contentType,
+      disposition: 'inline',
+    });
+  }
+
+  // 2. Disk fallback
   const filePath = path.join(uploadDir, doc.storedName);
   if (!fs.existsSync(filePath)) {
     return res.status(404).json({ message: 'File missing from storage' });
@@ -198,10 +215,21 @@ router.post('/documents', protect, uploadLimiter, upload.single('file'), validat
     const docs = await Document.find({ user: req.user.id });
     const usedBytes = docs.reduce((acc, doc) => acc + doc.size, 0);
     if (usedBytes + req.file.size > VAULT_QUOTA_BYTES) {
-      // Clean up uploaded file
-      fs.unlinkSync(req.file.path);
       return res.status(413).json({ message: 'Vault quota exceeded. Max 10 GB allowed.' });
     }
+
+    const storedName = req.file.filename;
+
+    // Stream directly into GridFS
+    await uploadBufferToGridFS(storedName, req.file.buffer, {
+      contentType: req.file.mimetype,
+      metadata: {
+        originalName: originalName || req.file.originalname,
+        user: req.user.id,
+        category: category || 'Uncategorized',
+        isEncrypted: encryptedBool,
+      },
+    });
 
     const parsedTags = typeof tags === 'string' && tags !== 'undefined' ? JSON.parse(tags) : (tags || []);
     const parsedSalt = typeof salt === 'string' && salt !== '' && salt !== 'undefined' ? JSON.parse(salt) : salt;
@@ -210,7 +238,7 @@ router.post('/documents', protect, uploadLimiter, upload.single('file'), validat
     const doc = await Document.create({
       user: req.user.id,
       originalName: originalName || req.file.originalname,
-      storedName: req.file.filename,
+      storedName,
       mimeType: req.file.mimetype,
       size: req.file.size,
       category: category || 'Uncategorized',
@@ -235,9 +263,6 @@ router.post('/documents', protect, uploadLimiter, upload.single('file'), validat
       iv: doc.iv
     });
   } catch (error) {
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
     res.status(500).json({ message: error.message });
   }
 });
@@ -271,9 +296,14 @@ router.delete('/documents/:id', protect, async (req, res) => {
       return res.status(401).json({ message: 'User not authorized to delete this file' });
     }
 
+    // Delete from GridFS
+    await deleteFromGridFS(doc.storedName);
+
     const filePath = path.join(uploadDir, doc.storedName);
     if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+      try {
+        fs.unlinkSync(filePath);
+      } catch (_) {}
     }
 
     await doc.deleteOne();

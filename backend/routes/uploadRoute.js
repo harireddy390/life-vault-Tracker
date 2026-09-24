@@ -4,9 +4,11 @@ const path = require('path');
 const fs = require('fs');
 const { protect } = require('../middleware/authMiddleware');
 const { escapeRegex } = require('../utils/securityUtils');
+const { findGridFSFile, streamGridFSFile } = require('../services/gridfsService');
 
 // Models for ownership verification
 const FamilyDocument = require('../models/FamilyDocument');
+const FamilyMember = require('../models/FamilyMember');
 const Transaction = require('../models/Transaction');
 const HealthRecord = require('../models/HealthRecord');
 const LearningResource = require('../models/LearningResource');
@@ -36,7 +38,10 @@ async function checkOwnership(subfolder, safeFilename, userId) {
       GoalAttachment.findOne({ $or: [{ file_url: regex }, { stored_name: safeFilename }] })
     );
   } else if (subfolder === 'family') {
-    queries.push(FamilyDocument.findOne({ file_url: regex }));
+    queries.push(
+      FamilyDocument.findOne({ file_url: regex }),
+      FamilyMember.findOne({ 'documents.file_url': regex })
+    );
   } else if (subfolder === 'finance') {
     queries.push(Transaction.findOne({ receipt_url: regex }));
   } else if (subfolder === 'health') {
@@ -116,14 +121,19 @@ router.get('/*', protect, async (req, res) => {
       return res.status(404).json({ message: 'File not found or unassociated with your account.' });
     }
 
-    // File belongs to authenticated user - verify disk existence
-    if (!fs.existsSync(resolvedPath)) {
-      return res.status(404).json({ message: 'File missing from storage.' });
+    // 1. Primary storage: Attempt to stream from MongoDB GridFS
+    const gridFile = await findGridFSFile(normalized) || await findGridFSFile(safeFilename);
+    if (gridFile) {
+      return streamGridFSFile(gridFile, req, res, { filename: safeFilename });
     }
 
-    // Secure response headers
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    return res.sendFile(resolvedPath);
+    // 2. Secondary fallback: Check local disk storage (for pre-migration files)
+    if (fs.existsSync(resolvedPath)) {
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      return res.sendFile(resolvedPath);
+    }
+
+    return res.status(404).json({ message: 'File missing from storage.' });
   } catch (error) {
     console.error('Error serving upload:', error);
     return res.status(500).json({ message: 'Error retrieving file.' });

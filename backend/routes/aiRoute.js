@@ -44,14 +44,15 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-const aiStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    const unique = `ai-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
-    cb(null, unique);
-  },
-});
+const {
+  uploadBufferToGridFS,
+  findGridFSFile,
+  streamGridFSFile,
+  deleteFromGridFS,
+  downloadGridFSBuffer,
+} = require('../services/gridfsService');
+
+const aiStorage = multer.memoryStorage();
 
 const ALLOWED_EXTENSIONS = [
   '.pdf', '.docx', '.txt', '.csv', '.json', '.md',
@@ -69,11 +70,28 @@ const aiFileFilter = (req, file, cb) => {
   );
 };
 
-const aiUpload = multer({
+const aiUploadInstance = multer({
   storage: aiStorage,
   fileFilter: aiFileFilter,
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
 });
+
+function wrapAiUpload(fn) {
+  return (req, res, next) => {
+    fn(req, res, (err) => {
+      if (err) return res.status(400).json({ message: err.message || 'File upload error.' });
+      if (req.file) {
+        const ext = path.extname(req.file.originalname);
+        req.file.filename = `ai-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+      }
+      next();
+    });
+  };
+}
+
+const aiUpload = {
+  single: (field) => wrapAiUpload(aiUploadInstance.single(field)),
+};
 
 const BASE_SYSTEM_PROMPT = `You are Life AI, the intelligent personal assistant and autonomous copilot built directly into Life Vault.
 Your mission is to help the user organize, analyze, execute, and make progress across every area of their personal operating system: tasks, routine schedule blocks, goals, habits, learning notes, documents, vitals, finances, and memories.
@@ -655,8 +673,7 @@ router.post('/upload', protect, uploadLimiter, aiUpload.single('file'), validate
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    const { filename, originalname, mimetype, size } = req.file;
-    const filePath = path.join(uploadDir, filename);
+    const { filename, originalname, mimetype, size, buffer } = req.file;
 
     let attachmentType = 'document';
     let extractedText = '';
@@ -664,13 +681,25 @@ router.post('/upload', protect, uploadLimiter, aiUpload.single('file'), validate
     if (isImageFile(mimetype, originalname)) {
       attachmentType = 'image';
     } else {
-      const result = await extractDocumentContent(filePath, originalname, mimetype);
+      const result = await extractDocumentContent(buffer, originalname, mimetype);
       if (result.success) {
         extractedText = result.text;
       } else {
         extractedText = `[Document text extraction warning: ${result.error}]`;
       }
     }
+
+    // Upload to GridFS
+    await uploadBufferToGridFS(filename, buffer, {
+      contentType: mimetype,
+      metadata: {
+        userId: req.user.id,
+        originalName: originalname,
+        storedName: filename,
+        subfolder: 'ai',
+        fileSize: size,
+      },
+    });
 
     const attachment = await AIAttachment.create({
       user: req.user.id,
@@ -720,6 +749,13 @@ router.get('/attachments/:filename', protect, async (req, res) => {
       return res.status(404).json({ message: 'Attachment not found or access denied' });
     }
 
+    // Try GridFS first
+    const gridFile = await findGridFSFile(safeFilename);
+    if (gridFile) {
+      return streamGridFSFile(gridFile, req, res, { downloadName: attachment.originalName });
+    }
+
+    // Fallback to disk
     const filePath = path.join(uploadDir, safeFilename);
 
     if (!fs.existsSync(filePath)) {
@@ -881,9 +917,23 @@ router.post('/chat', protect, aiLimiter, async (req, res) => {
         }
 
         if (att.attachmentType === 'image') {
+          let base64 = null;
           const filePath = path.join(uploadDir, safeStoredName);
           if (fs.existsSync(filePath)) {
-            const base64 = readImageBase64(filePath);
+            base64 = readImageBase64(filePath);
+          } else {
+            const gridFile = await findGridFSFile(safeStoredName);
+            if (gridFile) {
+              try {
+                const buf = await downloadGridFSBuffer(gridFile._id);
+                base64 = buf.toString('base64');
+              } catch (e) {
+                console.warn('[aiRoute] Failed reading image from GridFS:', e.message);
+              }
+            }
+          }
+
+          if (base64) {
             promptImages.push({
               mediaType: verifiedAttachment.mimeType || att.mimeType || 'image/jpeg',
               data: base64,

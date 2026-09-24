@@ -7,27 +7,30 @@ const { protect } = require('../middleware/authMiddleware');
 const { escapeRegex, sanitizeCsvValue } = require('../utils/securityUtils');
 const { validateUploadMagicBytes } = require('../config/upload');
 
+const {
+  uploadBufferToGridFS,
+  deleteFromGridFS,
+} = require('../services/gridfsService');
+
 const Transaction = require('../models/Transaction');
 const Budget = require('../models/Budget');
 const RecurringBill = require('../models/RecurringBill');
 const LegacyExpense = require('../models/expenses');
 
-// ─── Multer Setup for Receipt Uploads ──────────────────────────────────────────
+// ─── Multer Setup for Receipt Uploads (GridFS memoryStorage) ────────────────
 const uploadDir = path.join(__dirname, '../uploads/finance');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
-  filename: (_req, file, cb) => {
-    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, unique + path.extname(file.originalname));
-  },
-});
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
   limits: { fileSize: 52428800 }, // 50 MB
   fileFilter: (_req, file, cb) => {
+    if (!file.filename && file.originalname) {
+      const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+      file.filename = unique + path.extname(file.originalname).toLowerCase();
+    }
     const allowed = ['.pdf', '.png', '.jpg', '.jpeg', '.webp'];
     const ext = path.extname(file.originalname).toLowerCase();
     if (!allowed.includes(ext) || file.mimetype === 'image/svg+xml' || file.mimetype.includes('html')) {
@@ -253,7 +256,16 @@ router.post('/transactions', protect, upload.single('receipt'), validateUploadMa
     let receipt_size_bytes = null;
 
     if (req.file) {
-      receipt_url = `/uploads/finance/${req.file.filename}`;
+      const filename = req.file.filename;
+      await uploadBufferToGridFS(`finance/${filename}`, req.file.buffer, {
+        contentType: req.file.mimetype,
+        metadata: {
+          originalName: req.file.originalname,
+          user: req.user.id,
+          subfolder: 'finance',
+        },
+      });
+      receipt_url = `/uploads/finance/${filename}`;
       receipt_name = req.file.originalname;
       receipt_size_bytes = req.file.size;
     }
@@ -309,12 +321,28 @@ router.put('/transactions/:id', protect, upload.single('receipt'), validateUploa
     if (notes !== undefined) transaction.notes = notes.trim();
 
     if (req.file) {
-      // Remove old file if present
+      // Remove old file from GridFS and disk if present
       if (transaction.receipt_url) {
+        const oldFilename = path.basename(transaction.receipt_url);
+        await deleteFromGridFS(`finance/${oldFilename}`);
+        await deleteFromGridFS(oldFilename);
         const oldFile = path.join(__dirname, '..', transaction.receipt_url.replace(/^[/\\]+/, ''));
-        if (fs.existsSync(oldFile)) fs.unlinkSync(oldFile);
+        if (fs.existsSync(oldFile)) {
+          try { fs.unlinkSync(oldFile); } catch (_) {}
+        }
       }
-      transaction.receipt_url = `/uploads/finance/${req.file.filename}`;
+
+      const filename = req.file.filename;
+      await uploadBufferToGridFS(`finance/${filename}`, req.file.buffer, {
+        contentType: req.file.mimetype,
+        metadata: {
+          originalName: req.file.originalname,
+          user: req.user.id,
+          subfolder: 'finance',
+        },
+      });
+
+      transaction.receipt_url = `/uploads/finance/${filename}`;
       transaction.receipt_name = req.file.originalname;
       transaction.receipt_size_bytes = req.file.size;
     }
@@ -332,10 +360,15 @@ router.delete('/transactions/:id', protect, async (req, res) => {
     const transaction = await Transaction.findById(req.params.id);
     if (!ownerCheck(transaction, req.user.id, res)) return;
 
-    // Unlink receipt file if present
+    // Delete receipt file from GridFS and disk if present
     if (transaction.receipt_url) {
+      const filename = path.basename(transaction.receipt_url);
+      await deleteFromGridFS(`finance/${filename}`);
+      await deleteFromGridFS(filename);
       const filePath = path.join(__dirname, '..', transaction.receipt_url.replace(/^[/\\]+/, ''));
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      if (fs.existsSync(filePath)) {
+        try { fs.unlinkSync(filePath); } catch (_) {}
+      }
     }
 
     await transaction.deleteOne();

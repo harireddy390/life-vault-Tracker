@@ -7,26 +7,29 @@ const { protect } = require('../middleware/authMiddleware');
 const { escapeRegex } = require('../utils/securityUtils');
 const { validateUploadMagicBytes } = require('../config/upload');
 
+const {
+  uploadBufferToGridFS,
+  deleteFromGridFS,
+} = require('../services/gridfsService');
+
 const FamilyMember = require('../models/FamilyMember');
 const FamilyDocument = require('../models/FamilyDocument');
 const FamilyEventRenewal = require('../models/FamilyEventRenewal');
 
-// ─── Multer Setup for Family Document Uploads ─────────────────────────────────
+// ─── Multer Setup for Family Document Uploads (GridFS memoryStorage) ────────
 const uploadDir = path.join(__dirname, '../uploads/family');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
-  filename: (_req, file, cb) => {
-    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, unique + path.extname(file.originalname));
-  },
-});
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
   limits: { fileSize: 52428800 }, // 50 MB
   fileFilter: (_req, file, cb) => {
+    if (!file.filename && file.originalname) {
+      const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+      file.filename = unique + path.extname(file.originalname).toLowerCase();
+    }
     const allowed = ['.pdf', '.png', '.jpg', '.jpeg', '.webp'];
     const ext = path.extname(file.originalname).toLowerCase();
     if (!allowed.includes(ext) || file.mimetype === 'image/svg+xml' || file.mimetype.includes('html')) {
@@ -302,7 +305,19 @@ const uploadDocHandler = async (req, res) => {
     }
 
     const { title, document_type, document_number, notes } = req.body;
-    const file_url = `/uploads/family/${req.file.filename}`;
+    const filename = req.file.filename;
+
+    await uploadBufferToGridFS(`family/${filename}`, req.file.buffer, {
+      contentType: req.file.mimetype,
+      metadata: {
+        originalName: req.file.originalname,
+        user: req.user.id,
+        family_member: member._id,
+        subfolder: 'family',
+      },
+    });
+
+    const file_url = `/uploads/family/${filename}`;
     const file_name = req.file.originalname;
     const docTitle = (title && title.trim()) ? title.trim() : file_name;
     const file_size_bytes = req.file.size;
@@ -338,8 +353,13 @@ router.delete('/documents/:docId', protect, async (req, res) => {
     if (!ownerCheck(doc, req.user.id, res)) return;
 
     if (doc.file_url) {
+      const filename = path.basename(doc.file_url);
+      await deleteFromGridFS(`family/${filename}`);
+      await deleteFromGridFS(filename);
       const filePath = path.join(__dirname, '..', doc.file_url.replace(/^[/\\]+/, ''));
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      if (fs.existsSync(filePath)) {
+        try { fs.unlinkSync(filePath); } catch (_) {}
+      }
     }
 
     await doc.deleteOne();
