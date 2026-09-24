@@ -1,102 +1,115 @@
-const nodemailer = require('nodemailer');
+const https = require('https');
 
 /**
  * LifeVault Email Service
- * Handles transactional email delivery using SMTP (Brevo recommended) with a
- * secure development fallback that logs the OTP code to the server console.
+ * Sends transactional email via Brevo HTTPS API (production) or logs to
+ * console (development fallback).
  *
- * Required environment variables (set in Render dashboard for production):
- *   SMTP_HOST     - e.g. smtp-relay.brevo.com
- *   SMTP_PORT     - e.g. 587
- *   SMTP_USER     - your Brevo login email
- *   SMTP_PASSWORD - your Brevo SMTP key (not account password)
- *   MAIL_FROM     - e.g. "LifeVault <noreply@yourdomain.com>"
+ * Why HTTPS API instead of SMTP:
+ *   Render Free tier blocks outbound TCP on port 25/465/587, which causes
+ *   SMTP connections to time out.  Brevo's REST API runs over HTTPS (port 443)
+ *   which is always open on Render.
+ *
+ * Required environment variables (set in Render dashboard):
+ *   BREVO_API_KEY  - Brevo API key (Transactional → API Keys in Brevo dashboard)
+ *   MAIL_FROM      - Verified sender, e.g. "LifeVault <noreply@yourdomain.com>"
+ *   CLIENT_URL     - Frontend origin(s), comma-separated
+ *
+ * Optional / legacy (kept for local SMTP testing only, not used in production):
+ *   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
  */
 
-// Determine client URL for password reset links
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Return the first entry of CLIENT_URL (used to build password-reset links).
+ */
 const getClientUrl = () => {
   if (process.env.CLIENT_URL) {
-    // If comma-separated list of origins, use the first one
     return process.env.CLIENT_URL.split(',')[0].trim().replace(/\/$/, '');
   }
   return 'http://localhost:5173';
 };
 
-// Check if production-ready SMTP credentials are provided
-const isSmtpConfigured = () => {
-  return Boolean(
+/**
+ * Parse a "Name <email@domain.com>" string into { name, email }.
+ * Falls back gracefully if the format is just a plain email address.
+ */
+const parseSender = (mailFrom) => {
+  if (!mailFrom) {
+    return { name: 'LifeVault', email: 'no-reply@lifevault.app' };
+  }
+  // Match: Any Name <email@domain.com>
+  const match = mailFrom.match(/^(.+?)\s*<([^>]+)>\s*$/);
+  if (match) {
+    return { name: match[1].trim(), email: match[2].trim() };
+  }
+  // Plain email with no display name
+  return { name: 'LifeVault', email: mailFrom.trim() };
+};
+
+/**
+ * Tiny wrapper around Node's built-in https.request that returns a Promise
+ * resolving to { statusCode, body }.  No external dependencies needed.
+ */
+const httpsPost = (url, headers, body) =>
+  new Promise((resolve, reject) => {
+    const payload = JSON.stringify(body);
+    const parsed = new URL(url);
+
+    const options = {
+      hostname: parsed.hostname,
+      path: parsed.pathname + parsed.search,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+        ...headers,
+      },
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => (data += chunk));
+      res.on('end', () => resolve({ statusCode: res.statusCode, body: data }));
+    });
+
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+
+// ---------------------------------------------------------------------------
+// Startup checks
+// ---------------------------------------------------------------------------
+
+const isBrevoConfigured = () => Boolean(process.env.BREVO_API_KEY);
+
+// Legacy SMTP check — kept so any existing import/test that references
+// isSmtpConfigured continues to work without modification.
+const isSmtpConfigured = () =>
+  Boolean(
     process.env.SMTP_HOST &&
     process.env.SMTP_USER &&
     process.env.SMTP_PASSWORD
   );
-};
 
-// Warn at module load time if running in production without SMTP configured.
-// This makes the misconfiguration immediately visible in Render logs on startup.
-if (process.env.NODE_ENV === 'production' && !isSmtpConfigured()) {
+// Warn at module load time so the misconfiguration is immediately visible
+// in Render logs on startup.
+if (process.env.NODE_ENV === 'production' && !isBrevoConfigured()) {
   console.error(
-    '[EMAIL SERVICE] CRITICAL: SMTP is not configured (SMTP_HOST / SMTP_USER / SMTP_PASSWORD ' +
-    'are missing). Password reset emails cannot be delivered. ' +
-    'Add these environment variables in the Render dashboard and redeploy.'
+    '[EMAIL SERVICE] CRITICAL: BREVO_API_KEY is not set. ' +
+    'Password-reset emails cannot be delivered in production. ' +
+    'Add BREVO_API_KEY in the Render dashboard and redeploy.'
   );
 }
 
-// Create transport dynamically based on current configuration
-const createTransport = () => {
-  if (isSmtpConfigured()) {
-    return nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT) || 587,
-      secure: Number(process.env.SMTP_PORT) === 465, // true for 465, false for other ports
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASSWORD,
-      },
-    });
-  }
-  return null;
-};
-
-/**
- * Send password reset email
- * @param {string} toEmail - Recipient email address
- * @param {string} rawToken - Raw unhashed password reset token
- * @param {string} [userName] - Recipient name
- * @returns {Promise<{ success: boolean, delivered: boolean, message?: string }>}
- */
-const sendPasswordResetEmail = async (toOrOptions, rawTokenParam, userNameParam) => {
-  let toEmail = toOrOptions;
-  let rawToken = rawTokenParam;
-  let userName = userNameParam || 'there';
-
-  if (typeof toOrOptions === 'object' && toOrOptions !== null) {
-    toEmail = toOrOptions.to || toOrOptions.email;
-    rawToken = toOrOptions.code || toOrOptions.token || toOrOptions.rawToken;
-    userName = toOrOptions.name || toOrOptions.userName || 'there';
-  }
-
-  const clientUrl = getClientUrl();
-  const resetUrl = `${clientUrl}/reset-password?code=${rawToken}&email=${encodeURIComponent(toEmail)}`;
-  const fromAddress = process.env.MAIL_FROM || 'LifeVault Security <no-reply@lifevault.app>';
-
-  const subject = `LifeVault - Your Password Reset Code: ${rawToken}`;
-  
-  const textContent = `Hello ${userName},
-
-We received a request to reset your password for your LifeVault account.
-
-Your 6-digit verification code is:
-${rawToken}
-
-You can also use this link to reset your password directly:
-${resetUrl}
-
-This code is valid for 15 minutes. If you did not request a password reset, you can safely ignore this email — your account remains secure.
-
-Best regards,
-The LifeVault Team`;
-
-  const htmlContent = `<!DOCTYPE html>
+// ---------------------------------------------------------------------------
+// Email HTML template (design unchanged from previous version)
+// ---------------------------------------------------------------------------
+const buildHtmlContent = (userName, rawToken, resetUrl) => `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -121,13 +134,13 @@ The LifeVault Team`;
 <body>
   <div class="container">
     <div class="brand">
-      <span>🛡️</span>
+      <span>🛡\uFE0F</span>
       <span>Life<span class="brand-accent">Vault</span></span>
     </div>
     <h1>Password Reset Verification</h1>
     <p>Hello ${userName || 'there'},</p>
     <p>We received a request to reset your password for your LifeVault account. Use the 6-digit verification code below to change your password:</p>
-    
+
     <div class="code-box">
       <div class="code-number">${rawToken}</div>
       <div class="code-label">Verification Code (Expires in 15 mins)</div>
@@ -146,25 +159,85 @@ The LifeVault Team`;
 </body>
 </html>`;
 
-  const transport = createTransport();
+// ---------------------------------------------------------------------------
+// Main send function
+// ---------------------------------------------------------------------------
 
-  if (transport) {
+/**
+ * Send a password-reset OTP email.
+ *
+ * Accepts either positional args (toEmail, rawToken, userName) or a single
+ * options object { to, code, name } — matching authRoute.js call signature.
+ *
+ * @returns {Promise<{ success: boolean, delivered: boolean, message?: string }>}
+ */
+const sendPasswordResetEmail = async (toOrOptions, rawTokenParam, userNameParam) => {
+  // ── Resolve arguments ──────────────────────────────────────────────────────
+  let toEmail = toOrOptions;
+  let rawToken = rawTokenParam;
+  let userName = userNameParam || 'there';
+
+  if (typeof toOrOptions === 'object' && toOrOptions !== null) {
+    toEmail = toOrOptions.to || toOrOptions.email;
+    rawToken = toOrOptions.code || toOrOptions.token || toOrOptions.rawToken;
+    userName = toOrOptions.name || toOrOptions.userName || 'there';
+  }
+
+  // ── Build email content ────────────────────────────────────────────────────
+  const clientUrl   = getClientUrl();
+  const resetUrl    = `${clientUrl}/reset-password?code=${rawToken}&email=${encodeURIComponent(toEmail)}`;
+  const subject     = `LifeVault - Your Password Reset Code: ${rawToken}`;
+  const htmlContent = buildHtmlContent(userName, rawToken, resetUrl);
+
+  // ── Production path: Brevo HTTPS Transactional Email API ──────────────────
+  if (isBrevoConfigured()) {
+    const sender = parseSender(process.env.MAIL_FROM);
+
+    const requestBody = {
+      sender,
+      to: [{ email: toEmail }],
+      subject,
+      htmlContent,
+    };
+
     try {
-      await transport.sendMail({
-        from: fromAddress,
-        to: toEmail,
-        subject,
-        text: textContent,
-        html: htmlContent,
-      });
-      return { success: true, delivered: true, code: rawToken, resetUrl };
-    } catch (error) {
-      console.error('[EMAIL ERROR] Failed to send email via SMTP:', error.message);
-      return { success: false, delivered: false, message: error.message, code: rawToken, resetUrl };
+      const response = await httpsPost(
+        'https://api.brevo.com/v3/smtp/email',
+        { 'api-key': process.env.BREVO_API_KEY },
+        requestBody
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        console.log(
+          `[EMAIL] Password-reset email dispatched via Brevo API to ${toEmail} ` +
+          `(HTTP ${response.statusCode})`
+        );
+        return { success: true, delivered: true };
+      }
+
+      // Non-2xx: log only the status code — never log the API key or raw
+      // response body which could contain provider internals.
+      console.error(
+        `[EMAIL ERROR] Brevo API returned HTTP ${response.statusCode} for ${toEmail}`
+      );
+      return {
+        success: false,
+        delivered: false,
+        message: 'Email delivery failed. Please try again later.',
+      };
+
+    } catch (err) {
+      // Network-level error (DNS failure, connection refused, etc.)
+      console.error('[EMAIL ERROR] Brevo API request failed:', err.message);
+      return {
+        success: false,
+        delivered: false,
+        message: 'Email service temporarily unavailable.',
+      };
     }
   }
 
-  // Development / fallback mode: SMTP credentials are not configured
+  // ── Development fallback: BREVO_API_KEY not set locally ───────────────────
   if (process.env.NODE_ENV !== 'production') {
     console.log('\n============================================================');
     console.log(`🔑 [LIFE VAULT DEV] PASSWORD RESET CODE FOR: ${toEmail}`);
@@ -177,20 +250,26 @@ The LifeVault Team`;
       delivered: false,
       code: rawToken,
       resetUrl,
-      message: 'SMTP not configured in local environment. Token logged for local testing.',
+      message: 'BREVO_API_KEY not set in local environment. OTP logged to console for testing.',
     };
   }
 
-  // Production with missing SMTP configuration: throw so authRoute.js catch block logs it.
-  // The raw token is never included in the error message to avoid accidental leakage.
+  // ── Production with no API key: throw so authRoute.js catch block logs it ─
+  // The raw OTP token is intentionally excluded from the error message.
   throw new Error(
-    'SMTP credentials are not configured. Password reset email could not be delivered. ' +
-    'Add SMTP_HOST, SMTP_USER, and SMTP_PASSWORD to the Render environment variables.'
+    'BREVO_API_KEY is not configured. Password-reset email could not be delivered. ' +
+    'Add BREVO_API_KEY to the Render environment variables and redeploy.'
   );
 };
 
+// ---------------------------------------------------------------------------
+// Exports
+// ---------------------------------------------------------------------------
 module.exports = {
   sendPasswordResetEmail,
-  isSmtpConfigured,
+  isSmtpConfigured,   // kept for backward-compatibility
+  isBrevoConfigured,
   getClientUrl,
 };
+
+
