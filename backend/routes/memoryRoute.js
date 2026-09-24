@@ -50,6 +50,40 @@ const upload = multer({
   },
 });
 
+// Middleware wrappers: Gracefully handle Multer errors with 400 instead of cascading to 500
+const memoryUpload = (req, res, next) => {
+  upload.array('files', 10)(req, res, (err) => {
+    if (err) {
+      if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({ message: 'File exceeds 50MB file size limit.' });
+        }
+        if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+          return res.status(400).json({ message: `Unexpected upload field '${err.field}'. Expected 'files'.` });
+        }
+        return res.status(400).json({ message: err.message });
+      }
+      return res.status(400).json({ message: err.message || 'File upload error.' });
+    }
+    if (Array.isArray(req.files)) {
+      req.files.forEach((file) => {
+        if (!file.filename && file.originalname) {
+          const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+          file.filename = unique + path.extname(file.originalname).toLowerCase();
+        }
+      });
+    }
+    next();
+  });
+};
+
+const memoryTextOnly = (req, res, next) => {
+  upload.none()(req, res, (err) => {
+    if (err) return res.status(400).json({ message: err.message || 'Form parsing error.' });
+    next();
+  });
+};
+
 // Helper function to map mime type to media_type
 function detectMediaType(mimetype, ext) {
   if (mimetype?.startsWith('video/') || ['.mp4', '.webm', '.mov', '.mkv'].includes(ext)) {
@@ -299,7 +333,7 @@ router.get('/:id', protect, async (req, res) => {
 });
 
 // POST /api/memories (Multipart file upload up to 10 files)
-router.post('/', protect, upload.array('files', 10), validateUploadMagicBytes, async (req, res) => {
+router.post('/', protect, memoryUpload, validateUploadMagicBytes, async (req, res) => {
   try {
     const {
       title,
@@ -354,6 +388,8 @@ router.post('/', protect, upload.array('files', 10), validateUploadMagicBytes, a
           media_type,
           file_url: `/uploads/memories/${filename}`,
           file_name: file.originalname,
+          storedName: filename,
+          originalName: file.originalname,
           file_size_bytes: file.size,
           mime_type: file.mimetype,
         };
@@ -380,7 +416,7 @@ router.post('/', protect, upload.array('files', 10), validateUploadMagicBytes, a
 });
 
 // PUT /api/memories/:id (Update metadata)
-router.put('/:id', protect, async (req, res) => {
+router.put('/:id', protect, memoryTextOnly, async (req, res) => {
   try {
     const memory = await Memory.findById(req.params.id);
     if (!checkOwner(memory, req.user.id, res)) return;
@@ -471,7 +507,7 @@ router.delete('/:id', protect, async (req, res) => {
 });
 
 // POST /api/memories/:id/media (Attach additional files)
-router.post('/:id/media', protect, upload.array('files', 10), validateUploadMagicBytes, async (req, res) => {
+router.post('/:id/media', protect, memoryUpload, validateUploadMagicBytes, async (req, res) => {
   try {
     const memory = await Memory.findById(req.params.id);
     if (!checkOwner(memory, req.user.id, res)) return;
@@ -499,6 +535,8 @@ router.post('/:id/media', protect, upload.array('files', 10), validateUploadMagi
           media_type,
           file_url: `/uploads/memories/${filename}`,
           file_name: file.originalname,
+          storedName: filename,
+          originalName: file.originalname,
           file_size_bytes: file.size,
           mime_type: file.mimetype,
         };

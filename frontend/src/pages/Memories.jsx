@@ -118,7 +118,14 @@ export default function Memories() {
     setIsSubmitting(true);
     try {
       if (memoryId) {
+        const filesToUpload = formData.getAll ? formData.getAll('files') : [];
+        if (formData.delete) {
+          formData.delete('files');
+        }
         await memoryService.updateMemory(memoryId, formData);
+        if (filesToUpload && filesToUpload.length > 0) {
+          await memoryService.uploadMedia(memoryId, filesToUpload);
+        }
         showToast('Memory updated successfully.');
       } else {
         await memoryService.createMemory(formData);
