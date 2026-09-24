@@ -2,7 +2,15 @@ const nodemailer = require('nodemailer');
 
 /**
  * LifeVault Email Service
- * Handles transactional email delivery using SMTP with secure development fallback.
+ * Handles transactional email delivery using SMTP (Brevo recommended) with a
+ * secure development fallback that logs the OTP code to the server console.
+ *
+ * Required environment variables (set in Render dashboard for production):
+ *   SMTP_HOST     - e.g. smtp-relay.brevo.com
+ *   SMTP_PORT     - e.g. 587
+ *   SMTP_USER     - your Brevo login email
+ *   SMTP_PASSWORD - your Brevo SMTP key (not account password)
+ *   MAIL_FROM     - e.g. "LifeVault <noreply@yourdomain.com>"
  */
 
 // Determine client URL for password reset links
@@ -22,6 +30,16 @@ const isSmtpConfigured = () => {
     process.env.SMTP_PASSWORD
   );
 };
+
+// Warn at module load time if running in production without SMTP configured.
+// This makes the misconfiguration immediately visible in Render logs on startup.
+if (process.env.NODE_ENV === 'production' && !isSmtpConfigured()) {
+  console.error(
+    '[EMAIL SERVICE] CRITICAL: SMTP is not configured (SMTP_HOST / SMTP_USER / SMTP_PASSWORD ' +
+    'are missing). Password reset emails cannot be delivered. ' +
+    'Add these environment variables in the Render dashboard and redeploy.'
+  );
+}
 
 // Create transport dynamically based on current configuration
 const createTransport = () => {
@@ -163,13 +181,12 @@ The LifeVault Team`;
     };
   }
 
-  // Production with missing SMTP configuration: Log warning on server, never leak raw token
-  console.warn(`[EMAIL SERVICE WARNING] SMTP not configured. Password reset email could not be delivered to ${toEmail}.`);
-  return {
-    success: false,
-    delivered: false,
-    message: 'Email service unavailable.',
-  };
+  // Production with missing SMTP configuration: throw so authRoute.js catch block logs it.
+  // The raw token is never included in the error message to avoid accidental leakage.
+  throw new Error(
+    'SMTP credentials are not configured. Password reset email could not be delivered. ' +
+    'Add SMTP_HOST, SMTP_USER, and SMTP_PASSWORD to the Render environment variables.'
+  );
 };
 
 module.exports = {
