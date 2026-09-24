@@ -1,5 +1,8 @@
 import api, { API_URL } from '../api/axiosConfig';
 
+// Derive the backend server base URL (e.g. "https://life-vault-tracker.onrender.com" from "https://life-vault-tracker.onrender.com/api")
+const BACKEND_BASE = (API_URL || '').replace(/\/api\/?$/, '');
+
 export const getMediaSrc = (mediaOrUrl) => {
   if (!mediaOrUrl) return '';
   let url = '';
@@ -13,6 +16,11 @@ export const getMediaSrc = (mediaOrUrl) => {
     return url;
   }
   let finalUrl = url.startsWith('http://') || url.startsWith('https://') ? url : (url.startsWith('/') ? url : `/${url}`);
+
+  if (finalUrl.startsWith('/uploads/') && BACKEND_BASE) {
+    finalUrl = `${BACKEND_BASE}${finalUrl}`;
+  }
+
   if (finalUrl.includes('/uploads/')) {
     try {
       const stored = localStorage.getItem('lifevault_user');

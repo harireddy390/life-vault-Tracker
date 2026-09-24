@@ -1,6 +1,6 @@
-import axios from 'axios';
+import api from '../api/axiosConfig';
 
-const API_URL = '/api/vault/auth';
+const AUTH_BASE = '/vault/auth';
 const PBKDF2_ITERATIONS = 100000;
 
 // Pure in-memory storage for zero-knowledge key material.
@@ -103,7 +103,7 @@ export async function deriveKey(password, salt) {
 
 export async function checkHasMasterPassword() {
   try {
-    const response = await axios.get(`${API_URL}/status`, {
+    const response = await api.get(`${AUTH_BASE}/status`, {
       headers: getAuthHeaders()
     });
     return response.data.hasMasterPassword;
@@ -127,7 +127,7 @@ export async function setMasterPassword(password) {
   }
 
   try {
-    await axios.post(`${API_URL}/setup`, { vaultPassword: password }, {
+    await api.post(`${AUTH_BASE}/setup`, { vaultPassword: password }, {
       headers: getAuthHeaders()
     });
     
@@ -143,7 +143,7 @@ export async function setMasterPassword(password) {
 
 export async function verifyMasterPassword(password) {
   try {
-    const response = await axios.post(`${API_URL}/verify`, { vaultPassword: password }, {
+    const response = await api.post(`${AUTH_BASE}/verify`, { vaultPassword: password }, {
       headers: getAuthHeaders()
     });
     

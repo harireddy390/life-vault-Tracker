@@ -1,6 +1,5 @@
-import axios from 'axios';
+import api from '../api/axiosConfig';
 
-const API_URL = '/api/vault';
 export const BASELINE_QUOTA_BYTES = 10 * 1024 * 1024 * 1024; // 10 GB Baseline
 
 const getAuthHeaders = () => {
@@ -19,7 +18,7 @@ const getAuthHeaders = () => {
  */
 export async function getAllDocuments() {
   try {
-    const response = await axios.get(`${API_URL}/documents`, {
+    const response = await api.get('/vault/documents', {
       headers: getAuthHeaders(),
     });
     return response.data;
@@ -35,7 +34,7 @@ export async function getAllDocuments() {
  */
 export async function downloadDocument(id, originalName) {
   try {
-    const response = await axios.get(`${API_URL}/documents/${id}/download`, {
+    const response = await api.get(`/vault/documents/${id}/download`, {
       headers: getAuthHeaders(),
       responseType: 'blob',
     });
@@ -50,7 +49,7 @@ export async function downloadDocument(id, originalName) {
  * Saves a new document to the Backend
  */
 export async function saveDocument(formData) {
-  const response = await axios.post(`${API_URL}/documents`, formData, {
+  const response = await api.post('/vault/documents', formData, {
     headers: {
       ...getAuthHeaders(),
       'Content-Type': 'multipart/form-data',
@@ -63,7 +62,7 @@ export async function saveDocument(formData) {
  * Deletes a document by ID
  */
 export async function deleteDocument(id) {
-  const response = await axios.delete(`${API_URL}/documents/${id}`, {
+  const response = await api.delete(`/vault/documents/${id}`, {
     headers: getAuthHeaders(),
   });
   return response.data;
@@ -73,7 +72,7 @@ export async function deleteDocument(id) {
  * Updates specific fields of an existing document
  */
 export async function updateDocument(id, updates) {
-  const response = await axios.put(`${API_URL}/documents/${id}`, updates, {
+  const response = await api.put(`/vault/documents/${id}`, updates, {
     headers: getAuthHeaders(),
   });
   return response.data;
@@ -84,7 +83,7 @@ export async function updateDocument(id, updates) {
  */
 export async function getTotalStorageUsed() {
   try {
-    const response = await axios.get(`${API_URL}/storage`, {
+    const response = await api.get('/vault/storage', {
       headers: getAuthHeaders(),
     });
     return response.data.usedBytes || 0;
