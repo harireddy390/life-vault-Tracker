@@ -82,10 +82,58 @@ const httpsPost = (url, headers, body) =>
   });
 
 // ---------------------------------------------------------------------------
+// Key sanitization and diagnostics (SAFE - NEVER logs full key or secret)
+// ---------------------------------------------------------------------------
+
+/**
+ * Cleanly extract the Brevo API key from environment, stripping any accidental
+ * surrounding quotes (single or double) and leading/trailing whitespace.
+ */
+const getBrevoApiKey = () => {
+  const raw = process.env.BREVO_API_KEY;
+  if (!raw || typeof raw !== 'string') return '';
+  return raw.trim().replace(/^["']|["']$/g, '');
+};
+
+/**
+ * Return a safe diagnostic summary of BREVO_API_KEY without exposing the key.
+ */
+const getBrevoKeyDiagnostic = () => {
+  const raw = process.env.BREVO_API_KEY;
+  if (!raw || typeof raw !== 'string' || !raw.trim()) {
+    return { configured: false, prefix: 'missing', length: 0 };
+  }
+  const cleaned = getBrevoApiKey();
+  let prefix = 'other';
+  if (cleaned.startsWith('xkeysib-')) {
+    prefix = 'xkeysib- (valid API key prefix)';
+  } else if (cleaned.startsWith('xsmtpsib-')) {
+    prefix = 'xsmtpsib- (WARNING: This is an SMTP key from the SMTP tab, not an API v3 key!)';
+  } else {
+    prefix = `${cleaned.substring(0, Math.min(8, cleaned.length))}...`;
+  }
+
+  const trimmed = raw.trim();
+  const hasQuotes =
+    trimmed.startsWith('"') ||
+    trimmed.startsWith("'") ||
+    trimmed.endsWith('"') ||
+    trimmed.endsWith("'");
+
+  return {
+    configured: true,
+    prefix,
+    length: cleaned.length,
+    hasQuotes,
+    hasWhitespace: raw !== trimmed,
+  };
+};
+
+// ---------------------------------------------------------------------------
 // Startup checks
 // ---------------------------------------------------------------------------
 
-const isBrevoConfigured = () => Boolean(process.env.BREVO_API_KEY);
+const isBrevoConfigured = () => Boolean(getBrevoApiKey());
 
 // Legacy SMTP check — kept so any existing import/test that references
 // isSmtpConfigured continues to work without modification.
@@ -96,14 +144,23 @@ const isSmtpConfigured = () =>
     process.env.SMTP_PASSWORD
   );
 
-// Warn at module load time so the misconfiguration is immediately visible
-// in Render logs on startup.
-if (process.env.NODE_ENV === 'production' && !isBrevoConfigured()) {
-  console.error(
-    '[EMAIL SERVICE] CRITICAL: BREVO_API_KEY is not set. ' +
-    'Password-reset emails cannot be delivered in production. ' +
-    'Add BREVO_API_KEY in the Render dashboard and redeploy.'
-  );
+// Startup diagnostic check (SAFE — no secrets logged)
+if (process.env.NODE_ENV === 'production') {
+  const diag = getBrevoKeyDiagnostic();
+  console.log('[EMAIL SERVICE] Brevo configuration status:', JSON.stringify(diag));
+  if (!diag.configured) {
+    console.error(
+      '[EMAIL SERVICE] CRITICAL: BREVO_API_KEY is not set. ' +
+      'Password-reset emails cannot be delivered in production. ' +
+      'Add BREVO_API_KEY in the Render dashboard and redeploy.'
+    );
+  } else if (diag.prefix.startsWith('xsmtpsib-')) {
+    console.error(
+      '[EMAIL SERVICE] CONFIGURATION WARNING: BREVO_API_KEY starts with "xsmtpsib-". ' +
+      'This is an SMTP key from Brevo > SMTP & API > SMTP tab. ' +
+      'The Brevo HTTPS API requires a v3 API key starting with "xkeysib-" from Brevo > SMTP & API > API Keys tab.'
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -201,9 +258,13 @@ const sendPasswordResetEmail = async (toOrOptions, rawTokenParam, userNameParam)
     };
 
     try {
+      const apiKey = getBrevoApiKey();
       const response = await httpsPost(
         'https://api.brevo.com/v3/smtp/email',
-        { 'api-key': process.env.BREVO_API_KEY },
+        {
+          'Accept': 'application/json',
+          'api-key': apiKey,
+        },
         requestBody
       );
 
@@ -215,10 +276,23 @@ const sendPasswordResetEmail = async (toOrOptions, rawTokenParam, userNameParam)
         return { success: true, delivered: true };
       }
 
-      // Non-2xx: log only the status code — never log the API key or raw
-      // response body which could contain provider internals.
+      // Non-2xx: log status code and safe error message from Brevo (without secrets)
+      let detail = '';
+      try {
+        const bodyObj = JSON.parse(response.body);
+        if (bodyObj && bodyObj.message) {
+          detail = `: ${bodyObj.message}`;
+        } else if (bodyObj && bodyObj.code) {
+          detail = `: ${bodyObj.code}`;
+        }
+      } catch (_) {
+        if (response.body) {
+          detail = `: ${response.body.slice(0, 120).trim()}`;
+        }
+      }
+
       console.error(
-        `[EMAIL ERROR] Brevo API returned HTTP ${response.statusCode} for ${toEmail}`
+        `[EMAIL ERROR] Brevo API returned HTTP ${response.statusCode}${detail} for ${toEmail}`
       );
       return {
         success: false,
@@ -269,6 +343,8 @@ module.exports = {
   sendPasswordResetEmail,
   isSmtpConfigured,   // kept for backward-compatibility
   isBrevoConfigured,
+  getBrevoApiKey,
+  getBrevoKeyDiagnostic,
   getClientUrl,
 };
 
