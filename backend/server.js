@@ -23,10 +23,26 @@ app.use(
   })
 );
 
-// Environment-driven CORS configuration
-const allowedOrigins = process.env.CLIENT_URL
+// Environment-driven CORS configuration.
+// CLIENT_URL (comma-separated) is the primary source of allowed origins.
+// The base set always includes local dev origins and the production Vercel URL
+// so neither breaks when CLIENT_URL is temporarily absent.
+const BASE_ORIGINS = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://localhost:4003',
+  'http://127.0.0.1:5173',
+  'https://life-vault-tracker.vercel.app', // production frontend
+];
+
+const envOrigins = process.env.CLIENT_URL
   ? process.env.CLIENT_URL.split(',').map((s) => s.trim().replace(/\/$/, ''))
-  : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:4003', 'http://127.0.0.1:5173'];
+  : [];
+
+// Merge env origins with base set, deduplicate
+const allowedOrigins = [...new Set([...BASE_ORIGINS, ...envOrigins])];
+
+console.log('[CORS] Allowed origins:', allowedOrigins);
 
 app.use(
   cors({
