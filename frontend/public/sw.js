@@ -32,8 +32,8 @@ self.addEventListener('push', (event) => {
   const title = data.title || '🔔 Life Vault Reminder';
   const options = {
     body: data.body || 'Your scheduled routine starts soon.',
-    icon: '/favicon.svg',
-    badge: '/favicon.svg',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/badge-72.png',
     vibrate: [120, 60, 120],
     data: data.data || { url: '/command' },
     tag: data.tag || 'routine-reminder',

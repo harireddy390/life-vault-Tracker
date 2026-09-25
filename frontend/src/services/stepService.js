@@ -23,7 +23,25 @@ export const logSteps = async (date, steps) => {
     return data;
 };
 
+/**
+ * Log or update live sensor steps specifically
+ */
+export const logSensorSteps = async (date, sensorSteps) => {
+    const { data } = await api.post('/steps', { date, sensorSteps, source: 'sensor' });
+    return data;
+};
+
+/**
+ * Log or update manual steps specifically
+ */
+export const logManualSteps = async (date, manualSteps) => {
+    const { data } = await api.post('/steps', { date, manualSteps, source: 'manual' });
+    return data;
+};
+
 export default {
     getSteps,
     logSteps,
+    logSensorSteps,
+    logManualSteps,
 };

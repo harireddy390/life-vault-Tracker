@@ -88,15 +88,27 @@ export default function RoutineNotificationCard({ showToast }) {
 
   if (loading) return null;
 
-  // Case 1: Browser does not support Web Push (e.g. old browser or iOS Safari without Add to Home Screen)
+  // Case 1: Browser does not support Web Push (e.g. iOS Safari without Add to Home Screen or non-secure context)
   if (!isSupported) {
+    const isIOSDevice = notificationService.isIOS();
     return (
-      <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 mb-5">
-        <div className="flex items-center gap-2.5 text-slate-500 text-xs">
-          <BellOff className="w-4 h-4 text-slate-400 shrink-0" />
-          <div>
-            <span className="font-bold text-slate-700 block">Routine Reminders</span>
-            <span>Web Push notifications are not supported on this browser. On iOS devices, please use "Add to Home Screen" to enable Web Push.</span>
+      <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/60 mb-5">
+        <div className="flex items-start gap-3 text-xs">
+          <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+            <BellOff className="w-4 h-4" />
+          </div>
+          <div className="flex-1">
+            <span className="font-bold text-amber-900 block mb-0.5">Routine Reminders</span>
+            {isIOSDevice ? (
+              <span className="text-amber-800 leading-relaxed block">
+                On iPhone &amp; iPad, Apple requires Life Vault to be installed on your Home Screen to deliver notifications.
+                Tap the Safari <strong>Share</strong> icon (square with upward arrow) and select <strong>"Add to Home Screen"</strong>, then open Life Vault from your Home Screen to enable reminders.
+              </span>
+            ) : (
+              <span className="text-amber-800 leading-relaxed block">
+                Web Push notifications are not supported on this browser or requires a secure HTTPS connection.
+              </span>
+            )}
           </div>
         </div>
       </div>

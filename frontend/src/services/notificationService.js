@@ -14,6 +14,26 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
+export function isSecureContext() {
+  return typeof window !== 'undefined' && Boolean(window.isSecureContext);
+}
+
+export function isIOS() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  return (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
+}
+
+export function isStandalone() {
+  if (typeof window === 'undefined') return false;
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    Boolean(window.navigator.standalone)
+  );
+}
+
 export function isPushSupported() {
   return (
     typeof window !== 'undefined' &&
@@ -21,6 +41,23 @@ export function isPushSupported() {
     'PushManager' in window &&
     'Notification' in window
   );
+}
+
+export function getDeviceLabel() {
+  if (typeof navigator === 'undefined') return 'Web Browser';
+  const ua = navigator.userAgent || '';
+  if (/Android/i.test(ua)) {
+    if (/Chrome/i.test(ua)) return 'Android Chrome';
+    if (/Firefox/i.test(ua)) return 'Android Firefox';
+    if (/Samsung/i.test(ua)) return 'Samsung Internet';
+    return 'Android Device';
+  }
+  if (/iPhone|iPad|iPod/i.test(ua)) {
+    return isStandalone() ? 'iOS PWA (Home Screen)' : 'iOS Safari';
+  }
+  if (/Macintosh/i.test(ua)) return 'macOS Safari/Chrome';
+  if (/Windows/i.test(ua)) return 'Windows Desktop';
+  return 'Web Device';
 }
 
 export function getPermissionState() {
@@ -53,6 +90,11 @@ export async function getExistingSubscription() {
 
 export async function subscribeToPush() {
   if (!isPushSupported()) {
+    if (isIOS() && !isStandalone()) {
+      throw new Error(
+        'On iOS devices, Web Push requires Life Vault to be added to your Home Screen. Tap Share -> "Add to Home Screen" first.'
+      );
+    }
     throw new Error('Web Push is not supported in this browser.');
   }
 
@@ -81,12 +123,13 @@ export async function subscribeToPush() {
     applicationServerKey,
   });
 
-  // 5. Send subscription + browser's IANA timezone to Life Vault backend
+  // 5. Send subscription + browser's IANA timezone and device label to Life Vault backend
   const timezone = Intl?.DateTimeFormat?.().resolvedOptions?.().timeZone || 'Asia/Kolkata';
 
   await api.post('/notifications/subscribe', {
     subscription: subscription.toJSON(),
     timezone,
+    deviceLabel: getDeviceLabel(),
   });
 
   return { success: true, permission: 'granted', subscription };
@@ -120,8 +163,17 @@ export async function getNotificationStatus() {
   return data;
 }
 
+// Automatically register service worker on boot if supported and in secure context
+if (typeof window !== 'undefined' && isPushSupported() && isSecureContext()) {
+  registerServiceWorker().catch(() => {});
+}
+
 export default {
+  isSecureContext,
+  isIOS,
+  isStandalone,
   isPushSupported,
+  getDeviceLabel,
   getPermissionState,
   registerServiceWorker,
   getExistingSubscription,

@@ -2,50 +2,85 @@ import { useEffect, useState } from 'react';
 import { toLocalDateString } from '../utils/date';
 import stepService from '../services/stepService';
 import authService from '../services/authService';
+import stepSensorService from '../services/stepSensorService';
 
 export default function StepCounter() {
   const today = toLocalDateString();
   const [user, setUser] = useState(authService.getCurrentUser());
   const [target, setTarget] = useState(user?.stepTarget || 10000);
-  const [todaySteps, setTodaySteps] = useState(0);
-  const [inputSteps, setInputSteps] = useState('');
-  const [logs, setLogs] = useState([]);
+  const [manualSteps, setManualSteps] = useState(0);
+  const [sensorSteps, setSensorSteps] = useState(0);
+  const [sensorStatus, setSensorStatus] = useState('initializing');
+  const [inputManual, setInputManual] = useState('');
   const [loading, setLoading] = useState(true);
   const [isEditingTarget, setIsEditingTarget] = useState(false);
   const [tempTarget, setTempTarget] = useState('');
-
-  // Device sync state (simulated integration boundary)
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [deviceConnected, setDeviceConnected] = useState(false); // Default to false to show boundary
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
-    const load = async () => {
+    let unsubscribe = null;
+
+    const initSensorAndData = async () => {
       setLoading(true);
+
+      // 1. Subscribe to live sensor service updates
+      unsubscribe = stepSensorService.subscribe((state) => {
+        setSensorSteps(state.sensorSteps);
+        setSensorStatus(state.status);
+      });
+
+      // 2. Initialize hardware sensor check
+      await stepSensorService.init();
+
+      // 3. Load persisted steps from backend
       try {
         const data = await stepService.getSteps();
-        setLogs(data);
-        const todayLog = data.find((l) => l.date === today);
-        setTodaySteps(todayLog ? todayLog.steps : 0);
-        setInputSteps(todayLog ? String(todayLog.steps) : '');
+        const todayLog = Array.isArray(data) ? data.find((l) => l.date === today) : null;
+        if (todayLog) {
+          const backendSensor = todayLog.sensorSteps || 0;
+          const backendManual = todayLog.manualSteps || (todayLog.source === 'manual' ? todayLog.steps : 0);
+          setManualSteps(backendManual);
+          stepSensorService.reconcileWithBackend(backendSensor);
+        }
       } catch (err) {
-        console.error('Failed to load steps', err);
+        console.warn('[StepCounter] Could not load backend steps:', err?.message);
       } finally {
         setLoading(false);
       }
     };
-    load();
+
+    initSensorAndData();
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, [today]);
 
-  const handleSaveSteps = async () => {
-    const stepsNum = Number(inputSteps);
-    if (isNaN(stepsNum) || stepsNum < 0) return;
+  const handleEnableSensor = async () => {
+    setActionLoading(true);
     try {
-      await stepService.logSteps(today, stepsNum);
-      setTodaySteps(stepsNum);
-      const data = await stepService.getSteps();
-      setLogs(data);
+      const granted = await stepSensorService.requestPermissionAndEnable();
+      if (!granted) {
+        setSensorStatus('permission_denied');
+      }
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleStopSensor = () => {
+    stepSensorService.stopTracking();
+  };
+
+  const handleSaveManualSteps = async () => {
+    const val = Number(inputManual);
+    if (isNaN(val) || val < 0) return;
+    try {
+      await stepService.logManualSteps(today, val);
+      setManualSteps(val);
+      setInputManual('');
     } catch (err) {
-      console.error('Failed to save steps', err);
+      console.error('Failed to save manual steps', err);
     }
   };
 
@@ -61,17 +96,10 @@ export default function StepCounter() {
     }
   };
 
-  const handleConnectDevice = () => {
-    setIsSyncing(true);
-    setTimeout(() => {
-      setIsSyncing(false);
-      alert('Native Health Integration coming soon! (Android Health Connect / Apple HealthKit boundary)');
-    }, 1500);
-  };
+  const totalSteps = sensorSteps + manualSteps;
+  const percentage = target > 0 ? Math.min(100, Math.round((totalSteps / target) * 100)) : 0;
+  const remaining = Math.max(0, target - totalSteps);
 
-  const percentage = target > 0 ? Math.min(100, Math.round((todaySteps / target) * 100)) : 0;
-  const remaining = Math.max(0, target - todaySteps);
-  
   let motivation = "Let's get moving!";
   if (percentage >= 100) motivation = "Daily target achieved 🎉";
   else if (percentage >= 80) motivation = "Almost there! 💪";
@@ -85,7 +113,8 @@ export default function StepCounter() {
 
   return (
     <div className="card panel step-panel flex flex-col relative" style={{ padding: '1.25rem', overflow: 'hidden' }}>
-      <div className="flex justify-between items-center mb-4">
+      {/* Header */}
+      <div className="flex justify-between items-center mb-3">
         <p className="panel-eyebrow m-0 flex items-center gap-2">
           <span>👟</span> Daily Movement
         </p>
@@ -100,6 +129,7 @@ export default function StepCounter() {
         </button>
       </div>
 
+      {/* Target Edit Modal Inline */}
       {isEditingTarget && (
         <div className="flex flex-col gap-2 mb-4 p-3 rounded" style={{ background: 'var(--background)' }}>
           <label className="text-sm font-medium">New Daily Target</label>
@@ -111,6 +141,7 @@ export default function StepCounter() {
         </div>
       )}
 
+      {/* Circular Progress Ring */}
       <div className="flex flex-col items-center justify-center relative mb-2">
         {loading ? (
           <div className="w-28 h-28 flex items-center justify-center"><span className="spinner"></span></div>
@@ -134,9 +165,9 @@ export default function StepCounter() {
                 style={{ transition: 'stroke-dashoffset 0.8s ease-in-out' }}
               />
             </svg>
-            <div className="absolute flex flex-col items-center justify-center z-10 w-full">
-              <span className="font-bold tracking-tight" style={{ color: 'var(--text-primary)', fontSize: '1.6rem', lineHeight: '1.2' }}>
-                {todaySteps.toLocaleString()}
+            <div className="absolute flex flex-col items-center justify-center z-10 w-full text-center">
+              <span className="font-bold tracking-tight" style={{ color: 'var(--text-primary)', fontSize: '1.5rem', lineHeight: '1.2' }}>
+                {totalSteps.toLocaleString()}
               </span>
               <span className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>/ {target.toLocaleString()}</span>
             </div>
@@ -144,34 +175,106 @@ export default function StepCounter() {
         )}
       </div>
 
-      <div className="text-center mb-5 mt-1">
+      <div className="text-center mb-3 mt-1">
         <p className="font-medium text-sm" style={{ color: percentage >= 100 ? 'var(--teal-500)' : 'var(--text-primary)' }}>
           {motivation}
         </p>
       </div>
 
-      <div className="device-integration-boundary p-3 rounded-lg mb-4 text-center flex flex-col gap-2" style={{ border: '1px dashed var(--border-strong)', background: 'var(--surface-muted)' }}>
-        <p className="text-xs" style={{ color: 'var(--text-secondary)', margin: 0 }}>
-          {deviceConnected ? "Synced with Android Health Connect" : "Device step data not connected."}
-        </p>
-        {!deviceConnected && (
-          <button className="btn btn-secondary btn-sm full-width" onClick={handleConnectDevice} disabled={isSyncing}>
-            {isSyncing ? "Connecting..." : "Connect App to Auto-Sync"}
-          </button>
+      {/* Sensor vs Manual Breakdown Pills */}
+      <div className="grid grid-cols-2 gap-2 mb-3 text-center">
+        <div className="p-2 rounded-lg" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
+          <span className="text-[10px] uppercase font-bold tracking-wider block" style={{ color: 'var(--text-muted)' }}>
+            Live Sensor
+          </span>
+          <span className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>
+            {sensorSteps.toLocaleString()}
+          </span>
+        </div>
+        <div className="p-2 rounded-lg" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
+          <span className="text-[10px] uppercase font-bold tracking-wider block" style={{ color: 'var(--text-muted)' }}>
+            Manual Logged
+          </span>
+          <span className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>
+            {manualSteps.toLocaleString()}
+          </span>
+        </div>
+      </div>
+
+      {/* Hardware Sensor Status Section */}
+      <div className="p-3 rounded-lg mb-3 flex flex-col gap-2" style={{ border: '1px solid var(--border-strong)', background: 'var(--surface-muted)' }}>
+        {sensorStatus === 'tracking' && (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <div>
+                <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 m-0">Live Step Tracking: Active</p>
+                <p className="text-[10px] text-slate-500 m-0">Source: Device Motion Sensor</p>
+              </div>
+            </div>
+            <button className="btn btn-ghost btn-sm" style={{ fontSize: '11px', padding: '2px 6px' }} onClick={handleStopSensor}>
+              Pause
+            </button>
+          </div>
+        )}
+
+        {sensorStatus === 'disabled' && (
+          <div className="flex flex-col gap-2">
+            <p className="text-xs text-slate-600 m-0">
+              Live hardware motion tracking available on this device.
+            </p>
+            <button
+              className="btn btn-primary btn-sm full-width"
+              onClick={handleEnableSensor}
+              disabled={actionLoading}
+            >
+              {actionLoading ? 'Connecting Sensor...' : '⚡ Enable Step Tracking'}
+            </button>
+          </div>
+        )}
+
+        {sensorStatus === 'permission_denied' && (
+          <div className="text-xs text-rose-600 flex flex-col gap-1">
+            <span className="font-bold">⚠️ Motion Sensor Permission Denied</span>
+            <span className="text-[11px] text-slate-500">
+              Allow Motion & Orientation access in your browser/device site settings to track physical steps.
+            </span>
+          </div>
+        )}
+
+        {sensorStatus === 'unsupported' && (
+          <div className="text-xs text-slate-500 flex flex-col gap-1">
+            <span className="font-semibold text-slate-600">Live Step Tracking unavailable</span>
+            <span className="text-[11px]">
+              This browser/device does not provide a physical motion sensor. You can log manual steps below.
+            </span>
+          </div>
         )}
       </div>
 
-      <div className="manual-entry flex items-center gap-2 mt-auto">
-        <input 
-          type="number" 
+      {/* Browser Lifecycle Background Limitation Notice */}
+      <p className="text-[10px] text-slate-400 text-center mb-3 leading-tight">
+        Note: Mobile browsers pause web motion sensors when the screen is locked or browser is minimized.
+      </p>
+
+      {/* Manual Entry Section */}
+      <div className="manual-entry flex items-center gap-2 mt-auto pt-2" style={{ borderTop: '1px solid var(--border)' }}>
+        <input
+          type="number"
           min="0"
-          className="input flex-1 p-2" 
-          placeholder="Manual entry..." 
-          style={{ fontSize: '0.875rem' }}
-          value={inputSteps} 
-          onChange={(e) => setInputSteps(e.target.value)} 
+          className="input flex-1 p-2"
+          placeholder="Manual steps (e.g. treadmill)..."
+          style={{ fontSize: '0.8125rem' }}
+          value={inputManual}
+          onChange={(e) => setInputManual(e.target.value)}
         />
-        <button className="btn btn-ghost btn-sm" style={{ padding: '0.45rem 0.75rem' }} onClick={handleSaveSteps}>Log</button>
+        <button
+          className="btn btn-secondary btn-sm"
+          style={{ padding: '0.45rem 0.75rem', fontSize: '0.75rem', fontWeight: 600 }}
+          onClick={handleSaveManualSteps}
+        >
+          Log Manual
+        </button>
       </div>
     </div>
   );
