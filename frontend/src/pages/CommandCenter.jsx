@@ -101,7 +101,8 @@ export default function CommandCenter() {
     const timer = setInterval(() => {
       // Background refresh without spinner
       commandService.getTodayData().then((res) => {
-        setData((prev) => ({ ...prev, summary: res.summary, schedule: res.schedule }));
+        if (!res) return;
+        setData((prev) => (prev ? { ...prev, summary: res.summary, schedule: res.schedule } : res));
         if (selectedDate === res.istContext?.dateStr) {
           setScheduleBlocks(res.schedule?.blocks || []);
         }
@@ -171,6 +172,37 @@ export default function CommandCenter() {
       };
     });
   }, [data?.istContext?.dateStr, selectedDate]);
+
+  const isTodaySelected = selectedDate === data?.istContext?.dateStr;
+  const isPastDateSelected = Boolean(
+    selectedDate && data?.istContext?.dateStr && selectedDate < data.istContext.dateStr
+  );
+  const currentMinutes =
+    data?.istContext?.currentMinutes ??
+    (new Date().getHours() * 60 + new Date().getMinutes());
+
+  // Automatically separate Active & Upcoming routines from Past or Expired routines
+  const activeUpcomingBlocks = React.useMemo(() => {
+    return scheduleBlocks.filter((b) => {
+      if (isTodaySelected) {
+        const endMin = b.endMinutes ?? (b.endTime ? timeToMinutes(b.endTime) : 1440);
+        const isPastDue = b.status === 'past_due' || b.isPast || currentMinutes >= endMin;
+        return !b.isCompleted && !b.isSkipped && !isPastDue;
+      }
+      if (isPastDateSelected) {
+        // When explicitly inspecting a past date, all routines on that day have passed
+        return false;
+      }
+      // Future date: all non-skipped blocks are upcoming
+      return !b.isSkipped;
+    });
+  }, [scheduleBlocks, isTodaySelected, isPastDateSelected, currentMinutes]);
+
+  const pastCompletedBlocks = React.useMemo(() => {
+    return scheduleBlocks.filter(
+      (b) => !activeUpcomingBlocks.some((aub) => aub._id === b._id)
+    );
+  }, [scheduleBlocks, activeUpcomingBlocks]);
 
   const handlePrevDay = () => {
     if (!selectedDate) return;
@@ -369,6 +401,31 @@ export default function CommandCenter() {
     );
   }
 
+  if (!data) {
+    return (
+      <div className="command-page flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-4 max-w-md mx-auto p-6 bg-white rounded-2xl border border-slate-200 shadow-sm">
+          <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto">
+            <AlertTriangle className="w-6 h-6" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Unable to load Command Center</h2>
+            <p className="text-xs text-slate-500 mt-1">
+              Could not retrieve your schedule. Please verify your connection or try again.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={loadTodayData}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const { istContext, summary, tasks, habits, fitness, learning, goals } = data || {};
   const activeBlock = summary?.activeBlock;
   const nextBlock = summary?.nextBlock;
@@ -393,33 +450,6 @@ export default function CommandCenter() {
   } else if (taskFilter === 'overdue') {
     displayedTasks = tasks?.overdue || [];
   }
-
-  const isTodaySelected = selectedDate === istContext?.dateStr;
-  const isPastDateSelected = Boolean(selectedDate && istContext?.dateStr && selectedDate < istContext.dateStr);
-  const currentMinutes = istContext?.currentMinutes ?? (new Date().getHours() * 60 + new Date().getMinutes());
-
-  // Automatically separate Active & Upcoming routines from Past or Expired routines
-  const activeUpcomingBlocks = React.useMemo(() => {
-    return scheduleBlocks.filter((b) => {
-      if (isTodaySelected) {
-        const endMin = b.endMinutes ?? timeToMinutes(b.endTime);
-        const isPastDue = b.status === 'past_due' || b.isPast || currentMinutes >= endMin;
-        return !b.isCompleted && !b.isSkipped && !isPastDue;
-      }
-      if (isPastDateSelected) {
-        // When explicitly inspecting a past date, all routines on that day have passed
-        return false;
-      }
-      // Future date: all non-skipped blocks are upcoming
-      return !b.isSkipped;
-    });
-  }, [scheduleBlocks, isTodaySelected, isPastDateSelected, currentMinutes]);
-
-  const pastCompletedBlocks = React.useMemo(() => {
-    return scheduleBlocks.filter(
-      (b) => !activeUpcomingBlocks.some((aub) => aub._id === b._id)
-    );
-  }, [scheduleBlocks, activeUpcomingBlocks]);
 
   const renderScheduleBlockItem = (block, isArchivedView = false) => {
     const isDone = block.isCompleted;
