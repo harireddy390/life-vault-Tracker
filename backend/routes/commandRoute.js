@@ -106,12 +106,15 @@ router.get('/today', protect, async (req, res) => {
         status = 'past_due';
       }
 
+      const isPast = isCompleted || (currentMinutes >= endMin);
+
       return {
         ...b,
         isCompleted,
         isSkipped,
         durationMinutes: duration,
         status,
+        isPast,
         startMinutes: startMin,
         endMinutes: endMin,
       };
@@ -306,13 +309,45 @@ router.get('/schedule', protect, async (req, res) => {
       .populate('linkedGoal', 'title category progress_percent')
       .lean();
 
-    const annotated = blocks.map((b) => ({
-      ...b,
-      isCompleted: (b.completedDates || []).includes(dateStr) || (!b.isRecurring && b.completed),
-      isSkipped: (b.skippedDates || []).includes(dateStr),
-      durationMinutes: getBlockDurationMinutes(b.startTime, b.endTime),
-      startMinutes: timeToMinutes(b.startTime),
-    }));
+    const istContext = getISTCurrentDateTime();
+    const isToday = dateStr === istContext.dateStr;
+    const isPastDate = dateStr < istContext.dateStr;
+
+    const annotated = blocks.map((b) => {
+      const isCompleted = (b.completedDates || []).includes(dateStr) || (!b.isRecurring && b.completed);
+      const isSkipped = (b.skippedDates || []).includes(dateStr);
+      const duration = getBlockDurationMinutes(b.startTime, b.endTime);
+      const startMin = timeToMinutes(b.startTime);
+      const endMin = timeToMinutes(b.endTime);
+
+      let status = 'upcoming';
+      if (isCompleted) {
+        status = 'completed';
+      } else if (isSkipped) {
+        status = 'skipped';
+      } else if (isToday) {
+        if (istContext.currentMinutes >= startMin && istContext.currentMinutes < endMin) {
+          status = 'active';
+        } else if (istContext.currentMinutes >= endMin) {
+          status = 'past_due';
+        }
+      } else if (isPastDate) {
+        status = 'past_due';
+      }
+
+      const isPast = isPastDate || (isToday && (isCompleted || istContext.currentMinutes >= endMin));
+
+      return {
+        ...b,
+        isCompleted,
+        isSkipped,
+        durationMinutes: duration,
+        startMinutes: startMin,
+        endMinutes: endMin,
+        status,
+        isPast,
+      };
+    });
 
     annotated.sort((a, b) => a.startMinutes - b.startMinutes);
 
@@ -327,6 +362,7 @@ router.get('/schedule', protect, async (req, res) => {
 router.get('/schedule/weekly', protect, async (req, res) => {
   try {
     const userId = req.user.id;
+    const istContext = getISTCurrentDateTime();
     const allBlocks = await ScheduleBlock.find({ user: userId })
       .populate('linkedTask', 'text priority completed')
       .populate('linkedGoal', 'title category progress_percent')
@@ -345,16 +381,20 @@ router.get('/schedule/weekly', protect, async (req, res) => {
     allBlocks.forEach((b) => {
       const duration = getBlockDurationMinutes(b.startTime, b.endTime);
       const startMin = timeToMinutes(b.startTime);
-      const item = { ...b, durationMinutes: duration, startMinutes: startMin };
+      const endMin = timeToMinutes(b.endTime);
+      const item = { ...b, durationMinutes: duration, startMinutes: startMin, endMinutes: endMin };
 
       if (b.isRecurring && Array.isArray(b.daysOfWeek)) {
         b.daysOfWeek.forEach((d) => {
           if (days[d]) days[d].push(item);
         });
       } else if (!b.isRecurring && b.date) {
-        const [y, m, d] = b.date.split('-').map(Number);
-        const parsedDay = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-        if (days[parsedDay]) days[parsedDay].push(item);
+        // Automatically hide past/expired non-recurring routine occurrences
+        if (b.date >= istContext.dateStr) {
+          const [y, m, d] = b.date.split('-').map(Number);
+          const parsedDay = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+          if (days[parsedDay]) days[parsedDay].push(item);
+        }
       }
     });
 

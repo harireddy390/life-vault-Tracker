@@ -52,6 +52,7 @@ export default function CommandCenter() {
   const [selectedDate, setSelectedDate] = useState(null);
   const [scheduleBlocks, setScheduleBlocks] = useState([]);
   const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [showPastRoutines, setShowPastRoutines] = useState(false);
   const [taskFilter, setTaskFilter] = useState('all'); // 'all', 'mustDo', 'shouldDo', 'quickWins', 'overdue'
 
   // Weekly Operating System Mode
@@ -95,16 +96,19 @@ export default function CommandCenter() {
     loadTodayData();
   }, [loadTodayData]);
 
-  // Periodic timer tick (every 30s) to keep active schedule block updated
+  // Periodic timer tick (every 30s) to keep active schedule block and list updated
   useEffect(() => {
     const timer = setInterval(() => {
       // Background refresh without spinner
       commandService.getTodayData().then((res) => {
-        setData((prev) => ({ ...prev, summary: res.summary }));
+        setData((prev) => ({ ...prev, summary: res.summary, schedule: res.schedule }));
+        if (selectedDate === res.istContext?.dateStr) {
+          setScheduleBlocks(res.schedule?.blocks || []);
+        }
       }).catch(() => {});
     }, 30000);
     return () => clearInterval(timer);
-  }, []);
+  }, [selectedDate]);
 
   // ── Load Specific Date Schedule ───────────────────────────────────────────
   const handleDateChange = async (newDateStr) => {
@@ -391,6 +395,141 @@ export default function CommandCenter() {
   }
 
   const isTodaySelected = selectedDate === istContext?.dateStr;
+  const isPastDateSelected = Boolean(selectedDate && istContext?.dateStr && selectedDate < istContext.dateStr);
+  const currentMinutes = istContext?.currentMinutes ?? (new Date().getHours() * 60 + new Date().getMinutes());
+
+  // Automatically separate Active & Upcoming routines from Past or Expired routines
+  const activeUpcomingBlocks = React.useMemo(() => {
+    return scheduleBlocks.filter((b) => {
+      if (isTodaySelected) {
+        const endMin = b.endMinutes ?? timeToMinutes(b.endTime);
+        const isPastDue = b.status === 'past_due' || b.isPast || currentMinutes >= endMin;
+        return !b.isCompleted && !b.isSkipped && !isPastDue;
+      }
+      if (isPastDateSelected) {
+        // When explicitly inspecting a past date, all routines on that day have passed
+        return false;
+      }
+      // Future date: all non-skipped blocks are upcoming
+      return !b.isSkipped;
+    });
+  }, [scheduleBlocks, isTodaySelected, isPastDateSelected, currentMinutes]);
+
+  const pastCompletedBlocks = React.useMemo(() => {
+    return scheduleBlocks.filter(
+      (b) => !activeUpcomingBlocks.some((aub) => aub._id === b._id)
+    );
+  }, [scheduleBlocks, activeUpcomingBlocks]);
+
+  const renderScheduleBlockItem = (block, isArchivedView = false) => {
+    const isDone = block.isCompleted;
+    const isSkip = block.isSkipped;
+    const isActive = block.status === 'active';
+    const isPastDue = block.status === 'past_due' || block.isPast;
+
+    return (
+      <div
+        key={block._id}
+        className={`p-3.5 rounded-xl border transition-all flex items-center justify-between gap-3 ${
+          isDone
+            ? 'bg-slate-50/70 border-slate-200 opacity-65'
+            : isActive
+            ? 'bg-emerald-50/40 border-emerald-300 ring-1 ring-emerald-300'
+            : isSkip
+            ? 'bg-slate-50 border-dashed border-slate-300 opacity-50 line-through'
+            : isPastDue
+            ? 'bg-slate-50/70 border-slate-200 text-slate-700'
+            : 'bg-white border-slate-200 hover:border-slate-300'
+        }`}
+      >
+        {/* Left Block Details */}
+        <div className="flex items-center gap-3 min-w-0">
+          <button
+            type="button"
+            onClick={() => handleToggleBlock(block._id)}
+            className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors shrink-0 ${
+              isDone
+                ? 'bg-emerald-600 text-white shadow-2xs'
+                : 'bg-white border border-slate-300 hover:border-indigo-400 text-transparent'
+            }`}
+          >
+            <Check className="w-3.5 h-3.5 stroke-[3]" />
+          </button>
+
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs font-bold text-slate-800">
+                {block.startTime}
+              </span>
+              <span className="text-slate-300">•</span>
+              <span
+                className={`text-sm font-bold truncate ${
+                  isDone ? 'text-slate-500 line-through' : 'text-slate-900'
+                }`}
+              >
+                {block.title}
+              </span>
+              {isActive && (
+                <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700">
+                  Now
+                </span>
+              )}
+              {isPastDue && !isDone && !isSkip && (
+                <span className="text-[10px] font-bold uppercase px-1.5 py-0.2 rounded bg-slate-200/80 text-slate-600">
+                  Passed
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500">
+              <span>
+                {format12Hour(block.startTime)} – {format12Hour(block.endTime)} ({block.durationMinutes}m)
+              </span>
+              <span>•</span>
+              <span className="capitalize">{block.category}</span>
+              {block.linkedTask && (
+                <>
+                  <span>•</span>
+                  <span className="text-indigo-600 font-semibold truncate max-w-xs">
+                    Task: {block.linkedTask.text}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Right Quick Action Triggers */}
+        <div className="flex items-center gap-1 shrink-0">
+          {block.category === 'gym' && !isDone && (
+            <button
+              type="button"
+              onClick={() => setShowWorkoutModal(true)}
+              className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 text-[11px] font-bold border border-rose-200 transition-colors"
+            >
+              Log Gym
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => { setEditingBlock(block); setShowBlockModal(true); }}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            title="Edit Routine"
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => handleDeleteBlock(block._id)}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+            title="Delete Routine"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="command-page">
@@ -786,109 +925,55 @@ export default function CommandCenter() {
                     <span>Add Routine</span>
                   </button>
                 </div>
-              ) : (
+              ) : isPastDateSelected ? (
+                /* Past day review mode: show all routines for that historical date */
                 <div className="space-y-2.5">
-                  {scheduleBlocks.map((block) => {
-                    const isDone = block.isCompleted;
-                    const isSkip = block.isSkipped;
-                    const isActive = block.status === 'active';
+                  <div className="flex items-center justify-between text-xs text-slate-500 mb-1 px-1">
+                    <span className="font-semibold text-slate-700">Past Schedule Log</span>
+                    <span>{scheduleBlocks.filter((b) => b.isCompleted).length} / {scheduleBlocks.length} completed</span>
+                  </div>
+                  {scheduleBlocks.map((block) => renderScheduleBlockItem(block, true))}
+                </div>
+              ) : (
+                /* Today / Future day mode: only show active and upcoming routines */
+                <div className="space-y-4">
+                  {activeUpcomingBlocks.length > 0 ? (
+                    <div className="space-y-2.5">
+                      {activeUpcomingBlocks.map((block) => renderScheduleBlockItem(block, false))}
+                    </div>
+                  ) : (
+                    <div className="py-8 px-4 text-center rounded-2xl bg-slate-50/80 border border-slate-200">
+                      <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                      <h4 className="text-sm font-bold text-slate-800">All scheduled routines for today have concluded</h4>
+                      <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                        There are no more pending routines for today. Great work!
+                      </p>
+                    </div>
+                  )}
 
-                    return (
-                      <div
-                        key={block._id}
-                        className={`p-3.5 rounded-xl border transition-all flex items-center justify-between gap-3 ${
-                          isDone
-                            ? 'bg-slate-50/70 border-slate-200 opacity-65'
-                            : isActive
-                            ? 'bg-emerald-50/40 border-emerald-300 ring-1 ring-emerald-300'
-                            : isSkip
-                            ? 'bg-slate-50 border-dashed border-slate-300 opacity-50 line-through'
-                            : 'bg-white border-slate-200 hover:border-slate-300'
-                        }`}
+                  {/* Past / Concluded Routines Collapsible Archive */}
+                  {pastCompletedBlocks.length > 0 && (
+                    <div className="pt-3 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setShowPastRoutines((prev) => !prev)}
+                        className="inline-flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors py-1 group"
                       >
-                        {/* Left Block Details */}
-                        <div className="flex items-center gap-3 min-w-0">
-                          <button
-                            type="button"
-                            onClick={() => handleToggleBlock(block._id)}
-                            className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors shrink-0 ${
-                              isDone
-                                ? 'bg-emerald-600 text-white shadow-2xs'
-                                : 'bg-white border border-slate-300 hover:border-indigo-400 text-transparent'
-                            }`}
-                          >
-                            <Check className="w-3.5 h-3.5 stroke-[3]" />
-                          </button>
+                        <span className="w-4 h-4 rounded flex items-center justify-center bg-slate-100 group-hover:bg-slate-200 text-slate-600 transition-colors text-[10px]">
+                          {showPastRoutines ? '▼' : '▶'}
+                        </span>
+                        <span>
+                          {showPastRoutines ? 'Hide' : 'Show'} Past / Concluded Routines ({pastCompletedBlocks.length})
+                        </span>
+                      </button>
 
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono text-xs font-bold text-slate-800">
-                                {block.startTime}
-                              </span>
-                              <span className="text-slate-300">•</span>
-                              <span
-                                className={`text-sm font-bold truncate ${
-                                  isDone ? 'text-slate-500 line-through' : 'text-slate-900'
-                                }`}
-                              >
-                                {block.title}
-                              </span>
-                              {isActive && (
-                                <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-700">
-                                  Now
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500">
-                              <span>
-                                {format12Hour(block.startTime)} – {format12Hour(block.endTime)} ({block.durationMinutes}m)
-                              </span>
-                              <span>•</span>
-                              <span className="capitalize">{block.category}</span>
-                              {block.linkedTask && (
-                                <>
-                                  <span>•</span>
-                                  <span className="text-indigo-600 font-semibold truncate max-w-xs">
-                                    Task: {block.linkedTask.text}
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                          </div>
+                      {showPastRoutines && (
+                        <div className="space-y-2.5 mt-3 opacity-80 transition-opacity">
+                          {pastCompletedBlocks.map((block) => renderScheduleBlockItem(block, true))}
                         </div>
-
-                        {/* Right Quick Action Triggers */}
-                        <div className="flex items-center gap-1 shrink-0">
-                          {block.category === 'gym' && !isDone && (
-                            <button
-                              type="button"
-                              onClick={() => setShowWorkoutModal(true)}
-                              className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 text-[11px] font-bold border border-rose-200 transition-colors"
-                            >
-                              Log Gym
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => { setEditingBlock(block); setShowBlockModal(true); }}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-                            title="Edit Routine"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteBlock(block._id)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                            title="Delete Routine"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                      )}
+                    </div>
+                  )}
                 </div>
               )
             )}
