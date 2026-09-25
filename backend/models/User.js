@@ -28,6 +28,11 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 10000,
     },
+    timezone: {
+      type: String,
+      default: 'Asia/Kolkata',
+      trim: true,
+    },
     passwordResetToken: {
       type: String,
       select: false,

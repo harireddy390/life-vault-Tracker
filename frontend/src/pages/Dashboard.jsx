@@ -12,6 +12,7 @@ import authService from '../services/authService';
 import Toast from '../components/Toast';
 import StepCounter from '../components/StepCounter';
 import { toLocalDateString } from '../utils/date';
+import { getDashboardGreeting } from '../utils/greetingUtils';
 
 import { useDashboardStore } from '../hooks/useDashboardStore';
 import MomentumRing from '../components/dashboard/MomentumRing';
@@ -26,6 +27,15 @@ import './Dashboard.css';
 
 export default function Dashboard() {
   const user = authService.getCurrentUser();
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Auto-refresh greeting on local time transitions
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   // ── Remote data ──────────────────────────────────────────────────────────
   const [tasks, setTasks]           = useState([]);
@@ -166,9 +176,9 @@ export default function Dashboard() {
       {/* ── Top bar ── */}
       <div className="dash-header">
         <div>
-          <h1>Good morning, my buddy 👋</h1>
+          <h1>{getDashboardGreeting(user, currentTime)} 👋</h1>
           <p className="dash-subtitle">
-            {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            {currentTime.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>

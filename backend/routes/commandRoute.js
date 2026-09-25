@@ -67,7 +67,6 @@ async function ensureUserScheduleSeeded(userId) {
 router.get('/today', protect, async (req, res) => {
   try {
     const userId = req.user.id;
-    await ensureUserScheduleSeeded(userId);
 
     const istContext = getISTCurrentDateTime();
     const { dateStr, timeStr, dayOfWeek, formattedDate, greeting, currentMinutes } = istContext;

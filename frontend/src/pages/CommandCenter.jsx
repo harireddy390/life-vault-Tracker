@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import commandService from '../services/commandService';
+import authService from '../services/authService';
 import {
   getISTDateStr,
   getISTTimeString,
@@ -41,9 +42,11 @@ import ScheduleBlockModal from '../components/command/ScheduleBlockModal';
 import QuickTaskModal from '../components/command/QuickTaskModal';
 import WeeklyReviewModal from '../components/command/WeeklyReviewModal';
 import DailyScoreModal from '../components/command/DailyScoreModal';
+import RoutineNotificationCard from '../components/command/RoutineNotificationCard';
 import './CommandCenter.css';
 
 export default function CommandCenter() {
+  const user = authService.getCurrentUser();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
@@ -129,7 +132,7 @@ export default function CommandCenter() {
     }
   }, []);
 
-  // Compute current week's 7 days with workout split hints
+  // Compute current week's 7 days
   const weekDays = React.useMemo(() => {
     const baseDate = data?.istContext?.dateStr || selectedDate;
     if (!baseDate) return [];
@@ -138,17 +141,17 @@ export default function CommandCenter() {
     const dayOfWeek = today.getUTCDay();
     const sundayTime = today.getTime() - dayOfWeek * 86400000;
 
-    const splitInfo = [
-      { name: 'Sun', full: 'Sunday', split: 'Rest & Logistics' },
-      { name: 'Mon', full: 'Monday', split: 'Push Day' },
-      { name: 'Tue', full: 'Tuesday', split: 'Pull Day' },
-      { name: 'Wed', full: 'Wednesday', split: 'Leg Day' },
-      { name: 'Thu', full: 'Thursday', split: 'Push Day' },
-      { name: 'Fri', full: 'Friday', split: 'Pull Day' },
-      { name: 'Sat', full: 'Saturday', split: 'Physical Rest' },
+    const daysInfo = [
+      { name: 'Sun', full: 'Sunday' },
+      { name: 'Mon', full: 'Monday' },
+      { name: 'Tue', full: 'Tuesday' },
+      { name: 'Wed', full: 'Wednesday' },
+      { name: 'Thu', full: 'Thursday' },
+      { name: 'Fri', full: 'Friday' },
+      { name: 'Sat', full: 'Saturday' },
     ];
 
-    return splitInfo.map((info, idx) => {
+    return daysInfo.map((info, idx) => {
       const dayDate = new Date(sundayTime + idx * 86400000);
       const dateStr = dayDate.toISOString().split('T')[0];
       const isToday = dateStr === data?.istContext?.dateStr;
@@ -157,7 +160,6 @@ export default function CommandCenter() {
         dayIndex: idx,
         name: info.name,
         full: info.full,
-        split: info.split,
         dateStr,
         dayNum: dayDate.getUTCDate(),
         isToday,
@@ -218,35 +220,43 @@ export default function CommandCenter() {
   const handleSaveBlock = async (formData) => {
     setIsSubmitting(true);
     try {
-      if (editingBlock) {
+      if (editingBlock && editingBlock._id) {
         await commandService.updateScheduleBlock(editingBlock._id, formData);
-        showToast('Schedule block updated');
+        showToast('Routine updated');
       } else {
         await commandService.saveScheduleBlock(formData);
-        showToast('New block added to your schedule');
+        showToast('New routine added to your schedule');
       }
       setShowBlockModal(false);
       setEditingBlock(null);
       handleDateChange(selectedDate);
       const updated = await commandService.getTodayData();
       setData(updated);
+      if (scheduleViewMode === 'weekly') {
+        loadWeeklyData();
+      }
     } catch (err) {
-      showToast('Failed to save schedule block', 'error');
+      showToast('Failed to save routine', 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDeleteBlock = async (blockId) => {
-    if (!window.confirm('Delete this schedule block?')) return;
+    if (!window.confirm('Delete this routine?')) return;
     try {
       await commandService.deleteScheduleBlock(blockId);
       setShowBlockModal(false);
       setEditingBlock(null);
-      showToast('Schedule block deleted');
+      showToast('Routine deleted');
       handleDateChange(selectedDate);
+      const updated = await commandService.getTodayData();
+      setData(updated);
+      if (scheduleViewMode === 'weekly') {
+        loadWeeklyData();
+      }
     } catch {
-      showToast('Failed to delete block', 'error');
+      showToast('Failed to delete routine', 'error');
     }
   };
 
@@ -391,7 +401,7 @@ export default function CommandCenter() {
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-extrabold uppercase tracking-widest text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100 flex items-center gap-1.5">
-              <Zap className="w-3.5 h-3.5 fill-indigo-600 text-indigo-600" /> Personal OS
+              <Zap className="w-3.5 h-3.5 fill-indigo-600 text-indigo-600" /> Command Center
             </span>
             <span className="text-xs text-slate-400 font-mono">
               IST • {istContext?.timeStr}
@@ -399,9 +409,12 @@ export default function CommandCenter() {
           </div>
 
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-1">
-            {istContext?.greeting}
+            {user?.name ? `${istContext?.greeting?.replace(' 👋', '') || 'Welcome'}, ${user.name.split(' ')[0]}` : (istContext?.greeting || 'Command Center')}
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 font-medium">
+          <p className="text-xs sm:text-sm text-indigo-600 font-semibold mt-0.5">
+            Your schedule, your flexibility.
+          </p>
+          <p className="text-xs text-slate-500 font-medium">
             {istContext?.formattedDate}
           </p>
         </div>
@@ -458,14 +471,14 @@ export default function CommandCenter() {
             <span>Weekly Review</span>
           </button>
 
-          {/* New Schedule Block */}
+          {/* New Routine */}
           <button
             type="button"
             onClick={() => { setEditingBlock(null); setShowBlockModal(true); }}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-bold shadow-sm shadow-indigo-600/30 transition-all"
           >
             <Plus className="w-4 h-4" />
-            <span>+ Add Block</span>
+            <span>+ Add Routine</span>
           </button>
         </div>
       </div>
@@ -498,6 +511,9 @@ export default function CommandCenter() {
           ) : null}
         </div>
       )}
+
+      {/* ── Routine Notification Card ────────────────────────────────────── */}
+      <RoutineNotificationCard showToast={showToast} />
 
       {/* ── 3. HERO CURRENT & NEXT RUNWAY ───────────────────────────────────── */}
       {isTodaySelected && (
@@ -614,7 +630,7 @@ export default function CommandCenter() {
                 <div>
                   <h2 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-indigo-600" />
-                    <span>{scheduleViewMode === 'daily' ? 'Timeline Plan' : 'Weekly Operating System'}</span>
+                    <span>{scheduleViewMode === 'daily' ? 'Timeline Plan' : 'Weekly Blueprint'}</span>
                     {scheduleViewMode === 'daily' && (
                       <span className="text-xs font-normal text-slate-400">
                         ({scheduleBlocks.filter((b) => b.isCompleted).length} / {scheduleBlocks.length} done)
@@ -624,7 +640,7 @@ export default function CommandCenter() {
                   <p className="text-xs text-slate-500 mt-0.5">
                     {scheduleViewMode === 'daily'
                       ? formatISTDisplayDate(selectedDate)
-                      : 'Master 5-Day PPL-UL & Weekend Operating System'}
+                      : 'Weekly Schedule & Routine Blueprint'}
                   </p>
                 </div>
 
@@ -654,7 +670,7 @@ export default function CommandCenter() {
                     }`}
                   >
                     <span>📋 Weekly OS</span>
-                    <span className="text-[10px] bg-indigo-100 text-indigo-700 font-extrabold px-1.5 py-0.2 rounded-full">PPL-UL</span>
+                    <span className="text-[10px] bg-indigo-100 text-indigo-700 font-extrabold px-1.5 py-0.2 rounded-full">Weekly</span>
                   </button>
                 </div>
               </div>
@@ -702,15 +718,7 @@ export default function CommandCenter() {
                       className="px-2.5 py-1 text-xs font-bold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1 transition-colors"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      <span>Add Block</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSeedRoutine}
-                      className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-400 hover:text-indigo-600 transition-colors"
-                      title="Reset to default routine"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Add Routine</span>
                     </button>
                   </div>
                 </div>
@@ -739,19 +747,13 @@ export default function CommandCenter() {
                     <span className="text-sm font-extrabold leading-tight mt-0.5">
                       {day.dayNum}
                     </span>
-                    <span className={`text-[9px] font-semibold truncate max-w-full px-1 mt-0.5 rounded ${
-                      day.isSelected
-                        ? 'bg-indigo-700/60 text-white'
-                        : day.split.includes('Push')
-                        ? 'bg-amber-100 text-amber-800'
-                        : day.split.includes('Pull')
-                        ? 'bg-blue-100 text-blue-800'
-                        : day.split.includes('Leg')
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-slate-100 text-slate-600'
-                    }`}>
-                      {day.split.split(' ')[0]}
-                    </span>
+                    {day.isToday && (
+                      <span className={`text-[9px] font-extrabold px-1 mt-0.5 rounded ${
+                        day.isSelected ? 'bg-indigo-700/60 text-white' : 'bg-indigo-100 text-indigo-700'
+                      }`}>
+                        Today
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -762,15 +764,26 @@ export default function CommandCenter() {
               scheduleLoading ? (
                 <div className="py-8 text-center text-xs text-slate-400">Loading schedule...</div>
               ) : scheduleBlocks.length === 0 ? (
-                <div className="py-10 text-center space-y-2">
-                  <Clock className="w-8 h-8 mx-auto text-slate-300" />
-                  <p className="text-xs font-semibold text-slate-500">No schedule blocks found for this day.</p>
+                <div className="py-12 px-6 text-center space-y-4 bg-slate-50/70 rounded-2xl border-2 border-dashed border-slate-200">
+                  <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto shadow-2xs">
+                    <Clock className="w-7 h-7" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-base font-bold text-slate-900">Build your Command Center</h3>
+                    <p className="text-xs text-slate-500 max-w-md mx-auto">
+                      Add your routines and create a schedule that works for you.
+                    </p>
+                  </div>
                   <button
                     type="button"
-                    onClick={handleSeedRoutine}
-                    className="text-xs font-bold text-indigo-600 hover:underline"
+                    onClick={() => {
+                      setEditingBlock(null);
+                      setShowBlockModal(true);
+                    }}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-sm shadow-indigo-600/30 active:scale-95"
                   >
-                    Restore Default Routine
+                    <Plus className="w-4 h-4" />
+                    <span>Add Routine</span>
                   </button>
                 </div>
               ) : (
@@ -860,9 +873,17 @@ export default function CommandCenter() {
                             type="button"
                             onClick={() => { setEditingBlock(block); setShowBlockModal(true); }}
                             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-                            title="Edit Block"
+                            title="Edit Routine"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteBlock(block._id)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                            title="Delete Routine"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
@@ -878,161 +899,107 @@ export default function CommandCenter() {
                 <div className="py-12 text-center text-xs text-slate-400">Loading weekly blueprint...</div>
               ) : (
                 <div className="space-y-4">
-                  {/* Monday & Thursday: Push Day Card */}
-                  <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/30">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded-md bg-amber-600 text-white text-[11px] font-extrabold uppercase">
-                          Monday & Thursday
-                        </span>
-                        <h3 className="font-extrabold text-sm text-slate-900">
-                          Push Day Protocol (Chest, Shoulders, Triceps)
-                        </h3>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const mon = weekDays.find((w) => w.dayIndex === 1);
-                          if (mon) {
-                            setScheduleViewMode('daily');
-                            handleDateChange(mon.dateStr);
-                          }
-                        }}
-                        className="text-xs font-bold text-amber-700 hover:underline flex items-center gap-1"
-                      >
-                        <span>View Monday</span>
-                        <ArrowRight className="w-3 h-3" />
-                      </button>
-                    </div>
-                    <p className="text-xs text-slate-600 mb-3">
-                      Target: Upper chest shelf & V-taper at 62kg. Soya-veg lunch carb load (13:00) + Incline DB Press, Flat Press, Lateral Raises (17:35).
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                      {(weeklyData?.[1] || []).slice(0, 8).map((b, idx) => (
-                        <div key={idx} className="p-2 rounded-lg bg-white border border-slate-200/80 flex items-center justify-between">
-                          <span className="font-mono text-slate-500 text-[11px] font-semibold">{b.startTime} - {b.endTime}</span>
-                          <span className="font-bold text-slate-800 truncate ml-2">{b.title}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  {[
+                    { dayIndex: 1, name: 'Monday' },
+                    { dayIndex: 2, name: 'Tuesday' },
+                    { dayIndex: 3, name: 'Wednesday' },
+                    { dayIndex: 4, name: 'Thursday' },
+                    { dayIndex: 5, name: 'Friday' },
+                    { dayIndex: 6, name: 'Saturday' },
+                    { dayIndex: 0, name: 'Sunday' },
+                  ].map((day) => {
+                    const dayBlocks = weeklyData?.[day.dayIndex] || [];
+                    const targetDay = weekDays.find((w) => w.dayIndex === day.dayIndex);
 
-                  {/* Tuesday & Friday: Pull Day Card */}
-                  <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/30">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded-md bg-blue-600 text-white text-[11px] font-extrabold uppercase">
-                          Tuesday & Friday
-                        </span>
-                        <h3 className="font-extrabold text-sm text-slate-900">
-                          Pull Day Protocol (Back, Biceps, Rear Delts)
-                        </h3>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const tue = weekDays.find((w) => w.dayIndex === 2);
-                          if (tue) {
-                            setScheduleViewMode('daily');
-                            handleDateChange(tue.dateStr);
-                          }
-                        }}
-                        className="text-xs font-bold text-blue-700 hover:underline flex items-center gap-1"
-                      >
-                        <span>View Tuesday</span>
-                        <ArrowRight className="w-3 h-3" />
-                      </button>
-                    </div>
-                    <p className="text-xs text-slate-600 mb-3">
-                      Target: V-taper lats & arm thickness. Wide-Grip Lat Pulldowns, Seated Rows, DB Pullovers, Reverse Pec Deck, Hammer Curls.
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                      {(weeklyData?.[2] || []).slice(0, 8).map((b, idx) => (
-                        <div key={idx} className="p-2 rounded-lg bg-white border border-slate-200/80 flex items-center justify-between">
-                          <span className="font-mono text-slate-500 text-[11px] font-semibold">{b.startTime} - {b.endTime}</span>
-                          <span className="font-bold text-slate-800 truncate ml-2">{b.title}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                    return (
+                      <div key={day.dayIndex} className="p-4 rounded-xl border border-slate-200 bg-slate-50/40 hover:bg-white transition-all shadow-2xs">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-bold">
+                              {day.name}
+                            </span>
+                            <span className="text-xs text-slate-500 font-medium">
+                              {dayBlocks.length > 0
+                                ? `${dayBlocks.length} routine${dayBlocks.length === 1 ? '' : 's'}`
+                                : 'No routines'}
+                            </span>
+                          </div>
 
-                  {/* Wednesday: Leg Day Card */}
-                  <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/30">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[11px] font-extrabold uppercase">
-                          Wednesday
-                        </span>
-                        <h3 className="font-extrabold text-sm text-slate-900">
-                          Leg Day Protocol (Quads, Hamstrings, Calves)
-                        </h3>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const wed = weekDays.find((w) => w.dayIndex === 3);
-                          if (wed) {
-                            setScheduleViewMode('daily');
-                            handleDateChange(wed.dateStr);
-                          }
-                        }}
-                        className="text-xs font-bold text-emerald-700 hover:underline flex items-center gap-1"
-                      >
-                        <span>View Wednesday</span>
-                        <ArrowRight className="w-3 h-3" />
-                      </button>
-                    </div>
-                    <p className="text-xs text-slate-600 mb-3">
-                      Target: Lower body strength & posture. Machine Leg Press, Goblet Squats, Leg Extensions, Leg Curls, Calf Raises.
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                      {(weeklyData?.[3] || []).slice(0, 8).map((b, idx) => (
-                        <div key={idx} className="p-2 rounded-lg bg-white border border-slate-200/80 flex items-center justify-between">
-                          <span className="font-mono text-slate-500 text-[11px] font-semibold">{b.startTime} - {b.endTime}</span>
-                          <span className="font-bold text-slate-800 truncate ml-2">{b.title}</span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingBlock({ daysOfWeek: [day.dayIndex], isRecurring: true });
+                                setShowBlockModal(true);
+                              }}
+                              className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 hover:underline"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Add Routine</span>
+                            </button>
+                            {targetDay && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setScheduleViewMode('daily');
+                                  handleDateChange(targetDay.dateStr);
+                                }}
+                                className="text-xs font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1 ml-2"
+                              >
+                                <span>View Timeline</span>
+                                <ArrowRight className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
 
-                  {/* Saturday & Sunday: Weekend Protocol Card */}
-                  <div className="p-4 rounded-xl border border-purple-200 bg-purple-50/30">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded-md bg-purple-600 text-white text-[11px] font-extrabold uppercase">
-                          Saturday & Sunday
-                        </span>
-                        <h3 className="font-extrabold text-sm text-slate-900">
-                          Weekend Protocol (Zero Lifting, Deep Coding, Sunday Master Base)
-                        </h3>
+                        {dayBlocks.length > 0 ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                            {dayBlocks.map((b, idx) => (
+                              <div
+                                key={b._id || idx}
+                                className="p-2.5 rounded-lg bg-white border border-slate-200/90 flex items-center justify-between gap-2 shadow-2xs hover:border-slate-300 transition-colors"
+                              >
+                                <div className="min-w-0 flex items-center gap-2">
+                                  <span className="font-mono text-slate-500 text-[11px] font-bold shrink-0">
+                                    {b.startTime} - {b.endTime}
+                                  </span>
+                                  <span className="font-bold text-slate-800 truncate">
+                                    {b.title}
+                                  </span>
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 uppercase font-semibold shrink-0">
+                                    {b.category}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => { setEditingBlock(b); setShowBlockModal(true); }}
+                                    className="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                                    title="Edit Routine"
+                                  >
+                                    <Edit2 className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteBlock(b._id)}
+                                    className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                                    title="Delete Routine"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="py-2.5 text-center text-xs text-slate-400 border border-dashed border-slate-200 rounded-lg bg-white/50">
+                            No routines scheduled for {day.name}. Enjoy your free time or add a routine.
+                          </div>
+                        )}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const sun = weekDays.find((w) => w.dayIndex === 0);
-                          if (sun) {
-                            setScheduleViewMode('daily');
-                            handleDateChange(sun.dateStr);
-                          }
-                        }}
-                        className="text-xs font-bold text-purple-700 hover:underline flex items-center gap-1"
-                      >
-                        <span>View Sunday (Today)</span>
-                        <ArrowRight className="w-3 h-3" />
-                      </button>
-                    </div>
-                    <p className="text-xs text-slate-600 mb-3">
-                      Target: 48h CNS recovery. 7:00 AM sleep anchor, 8:00 AM B.Tech coding deep block, Sunday grocery & Master Base curry prep.
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                      {(weeklyData?.[0] || []).map((b, idx) => (
-                        <div key={idx} className="p-2 rounded-lg bg-white border border-slate-200/80 flex items-center justify-between">
-                          <span className="font-mono text-slate-500 text-[11px] font-semibold">{b.startTime} - {b.endTime}</span>
-                          <span className="font-bold text-slate-800 truncate ml-2">{b.title}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                    );
+                  })}
                 </div>
               )
             )}

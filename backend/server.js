@@ -96,8 +96,16 @@ app.use('/api/health', require('./routes/healthRoute'));
 app.use('/api/learning', require('./routes/learningRoute'));
 app.use('/api/finance', require('./routes/financeRoute'));
 app.use('/api/command', require('./routes/commandRoute'));
+app.use('/api/notifications', require('./routes/notificationRoute'));
 
-  app.get('/', (req, res) => {
+// Initialize Web Push and routine reminder scheduler
+const { initWebPush } = require('./services/notificationService');
+const { startScheduler } = require('./services/routineReminderScheduler');
+
+initWebPush();
+startScheduler(30000);
+
+app.get('/', (req, res) => {
   res.send('LifeVault API is running.');
 });
 

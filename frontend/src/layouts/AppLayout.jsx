@@ -385,7 +385,7 @@ export default function AppLayout({ children }) {
           </div>
           <div className="flex items-center gap-4">
             <span className="text-xs font-medium text-slate-600">
-              Hi, <span className="text-slate-900 font-semibold">{user?.name || 'my buddy'}</span>
+              Hi, <span className="text-slate-900 font-semibold">{user?.name ? user.name.split(' ')[0] : 'Friend'}</span>
             </span>
             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs shadow-md">
               {userInitial}
