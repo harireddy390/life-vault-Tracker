@@ -9,7 +9,10 @@ const BASE_URL = 'http://localhost:4003';
 function makeRequest(method, path, token = null, body = null) {
   return new Promise((resolve, reject) => {
     const url = new URL(path, BASE_URL);
-    const headers = { 'Content-Type': 'application/json' };
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-Forwarded-For': '192.168.102.' + (Math.floor(Math.random() * 240) + 10),
+    };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
     const req = http.request(

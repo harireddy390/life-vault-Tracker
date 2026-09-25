@@ -296,19 +296,6 @@ export default function CommandCenter() {
     }
   };
 
-  const handleSeedRoutine = async () => {
-    if (!window.confirm('Reset schedule to default routine? This will restore your complete weekday & weekend timeline.')) {
-      return;
-    }
-    try {
-      await commandService.seedRoutine();
-      showToast('Default routine restored successfully!');
-      loadTodayData();
-    } catch {
-      showToast('Failed to reset routine', 'error');
-    }
-  };
-
   // ── Task Actions ───────────────────────────────────────────────────────────
   const handleToggleTask = async (taskId) => {
     try {
@@ -938,9 +925,9 @@ export default function CommandCenter() {
                     <Clock className="w-7 h-7" />
                   </div>
                   <div className="space-y-1">
-                    <h3 className="text-base font-bold text-slate-900">Build your Command Center</h3>
+                    <h3 className="text-base font-bold text-slate-900">No routines yet</h3>
                     <p className="text-xs text-slate-500 max-w-md mx-auto">
-                      Add your routines and create a schedule that works for you.
+                      Create your first routine to get started.
                     </p>
                   </div>
                   <button

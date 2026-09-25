@@ -19,49 +19,6 @@ const {
   getBlockDurationMinutes,
 } = require('../utils/istTime');
 
-// ── DEFAULT USER ROUTINE TEMPLATE ─────────────────────────────────────────────
-const DEFAULT_WEEKDAY_ROUTINE = [
-  { title: 'Wake', startTime: '07:00', endTime: '07:05', category: 'routine', priority: 'high', daysOfWeek: [1, 2, 3, 4, 5] },
-  { title: 'Sunlight', startTime: '07:05', endTime: '07:15', category: 'routine', priority: 'medium', daysOfWeek: [1, 2, 3, 4, 5] },
-  { title: 'Hygiene', startTime: '07:15', endTime: '07:30', category: 'routine', priority: 'low', daysOfWeek: [1, 2, 3, 4, 5] },
-  { title: 'Meal preparation', startTime: '07:30', endTime: '07:45', category: 'routine', priority: 'medium', daysOfWeek: [1, 2, 3, 4, 5] },
-  { title: 'Breakfast / preparation', startTime: '07:45', endTime: '08:30', category: 'routine', priority: 'medium', daysOfWeek: [1, 2, 3, 4, 5] },
-  { title: 'Commute', startTime: '08:30', endTime: '09:00', category: 'routine', priority: 'low', daysOfWeek: [1, 2, 3, 4, 5] },
-  { title: 'College', startTime: '09:00', endTime: '16:30', category: 'college', priority: 'high', daysOfWeek: [1, 2, 3, 4, 5] },
-  { title: 'Commute back', startTime: '16:30', endTime: '17:00', category: 'routine', priority: 'low', daysOfWeek: [1, 2, 3, 4, 5] },
-  { title: 'Gym preparation', startTime: '17:00', endTime: '17:15', category: 'gym', priority: 'medium', daysOfWeek: [1, 2, 3, 4, 5] },
-  { title: 'Warm-up', startTime: '17:15', endTime: '17:35', category: 'gym', priority: 'medium', daysOfWeek: [1, 2, 3, 4, 5] },
-  { title: 'Gym', startTime: '17:35', endTime: '18:45', category: 'gym', priority: 'high', daysOfWeek: [1, 2, 3, 4, 5] },
-  { title: 'Walk back', startTime: '18:45', endTime: '19:05', category: 'routine', priority: 'low', daysOfWeek: [1, 2, 3, 4, 5] },
-  { title: 'Cooking / shower', startTime: '19:05', endTime: '19:20', category: 'routine', priority: 'low', daysOfWeek: [1, 2, 3, 4, 5] },
-  { title: 'Dinner preparation', startTime: '19:20', endTime: '19:45', category: 'routine', priority: 'medium', daysOfWeek: [1, 2, 3, 4, 5] },
-  { title: 'Academic work / coding', startTime: '19:45', endTime: '21:30', category: 'study', priority: 'high', daysOfWeek: [1, 2, 3, 4, 5] },
-  { title: 'Buffer / prepare for next day', startTime: '21:30', endTime: '22:30', category: 'personal', priority: 'low', daysOfWeek: [1, 2, 3, 4, 5] },
-  { title: 'Lights out', startTime: '22:30', endTime: '23:00', category: 'rest', priority: 'high', daysOfWeek: [1, 2, 3, 4, 5] },
-];
-
-const DEFAULT_WEEKEND_ROUTINE = [
-  { title: 'Wake', startTime: '07:00', endTime: '08:00', category: 'routine', priority: 'high', daysOfWeek: [0, 6] },
-  { title: 'B.Tech coding/projects', startTime: '08:00', endTime: '12:00', category: 'study', priority: 'high', daysOfWeek: [0, 6] },
-  { title: 'Grocery / meal preparation', startTime: '12:00', endTime: '14:00', category: 'routine', priority: 'medium', daysOfWeek: [0] },
-  { title: 'Gym rest / recovery', startTime: '17:35', endTime: '18:45', category: 'rest', priority: 'medium', daysOfWeek: [0, 6] },
-  { title: 'Lights out', startTime: '22:30', endTime: '23:00', category: 'rest', priority: 'high', daysOfWeek: [0, 6] },
-];
-
-/**
- * Auto-seeds initial user schedule blocks if user has none
- */
-async function ensureUserScheduleSeeded(userId) {
-  const count = await ScheduleBlock.countDocuments({ user: userId });
-  if (count === 0) {
-    const allTemplates = [
-      ...DEFAULT_WEEKDAY_ROUTINE.map((b, i) => ({ ...b, user: userId, isRecurring: true, order: i })),
-      ...DEFAULT_WEEKEND_ROUTINE.map((b, i) => ({ ...b, user: userId, isRecurring: true, order: i + 50 })),
-    ];
-    await ScheduleBlock.insertMany(allTemplates);
-  }
-}
-
 // ── GET /api/command/today ───────────────────────────────────────────────────
 // The core daily personal operating system state aggregator
 router.get('/today', protect, async (req, res) => {
@@ -557,22 +514,9 @@ router.post('/schedule/:id/skip', protect, async (req, res) => {
 });
 
 // ── POST /api/command/schedule/seed ──────────────────────────────────────────
-// Reset or seed user's routine
+// Deprecated: Routine auto-seeding is permanently disabled. Users start with an empty Command Center.
 router.post('/schedule/seed', protect, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    await ScheduleBlock.deleteMany({ user: userId });
-
-    const allTemplates = [
-      ...DEFAULT_WEEKDAY_ROUTINE.map((b, i) => ({ ...b, user: userId, isRecurring: true, order: i })),
-      ...DEFAULT_WEEKEND_ROUTINE.map((b, i) => ({ ...b, user: userId, isRecurring: true, order: i + 50 })),
-    ];
-    const created = await ScheduleBlock.insertMany(allTemplates);
-
-    res.json({ message: 'Routine seeded successfully', count: created.length });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
+  res.json({ message: 'Default routine seeding is disabled. Users create custom routines.', count: 0 });
 });
 
 // ── FAST WORKOUT LOGGING ─────────────────────────────────────────────────────
