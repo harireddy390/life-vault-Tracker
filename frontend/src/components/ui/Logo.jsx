@@ -14,6 +14,7 @@ export default function Logo({
   iconOnly = false,
   subtitle = null,
   className = '',
+  theme = 'light',
 }) {
   const rawId = useId();
   // Sanitize id for SVG url reference
@@ -82,7 +83,7 @@ export default function Logo({
       {svgIcon}
       <div className="flex flex-col">
         <span className="text-base tracking-tight whitespace-nowrap leading-none flex items-center">
-          <span className="font-semibold text-slate-100">Life</span>
+          <span className={`font-semibold ${theme === 'dark' ? 'text-slate-100' : 'text-slate-900'}`}>Life</span>
           <span
             className="font-extrabold bg-gradient-to-r from-sky-400 to-indigo-500 bg-clip-text text-transparent"
             style={{
@@ -96,7 +97,7 @@ export default function Logo({
           </span>
         </span>
         {subtitle && (
-          <span className="text-[10px] uppercase font-semibold tracking-wider text-indigo-300/80 mt-1">
+          <span className={`text-[10px] uppercase font-semibold tracking-wider mt-1 ${theme === 'dark' ? 'text-indigo-300/80' : 'text-indigo-600/80'}`}>
             {subtitle}
           </span>
         )}

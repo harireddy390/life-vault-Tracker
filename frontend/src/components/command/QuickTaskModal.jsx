@@ -1,13 +1,34 @@
-import React, { useState } from 'react';
-import { X, CheckSquare, Star, Plus, Calendar } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, CheckSquare, Star, Plus, Calendar, Save } from 'lucide-react';
 import { getISTDateStr } from '../../utils/istTime';
 
-export default function QuickTaskModal({ isOpen, onClose, onSubmit, isSubmitting = false }) {
+export default function QuickTaskModal({
+  isOpen,
+  onClose,
+  onSubmit,
+  initialData = null,
+  isSubmitting = false,
+}) {
   const [title, setTitle] = useState('');
   const [priority, setPriority] = useState('medium');
   const [dueDate, setDueDate] = useState(getISTDateStr());
   const [important, setImportant] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (initialData) {
+      setTitle(initialData.text || initialData.title || '');
+      setPriority(initialData.priority || 'medium');
+      setDueDate(initialData.dueDate || '');
+      setImportant(Boolean(initialData.important));
+    } else {
+      setTitle('');
+      setPriority('medium');
+      setDueDate(getISTDateStr());
+      setImportant(false);
+    }
+    setError('');
+  }, [initialData, isOpen]);
 
   if (!isOpen) return null;
 
@@ -35,7 +56,9 @@ export default function QuickTaskModal({ isOpen, onClose, onSubmit, isSubmitting
               <CheckSquare className="w-4.5 h-4.5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-900">Add Priority Task</h3>
+              <h3 className="text-base font-bold text-slate-900">
+                {initialData ? 'Edit Priority Task' : 'Add Priority Task'}
+              </h3>
               <p className="text-xs text-slate-500">Persists directly to your Life Vault task system</p>
             </div>
           </div>
@@ -138,8 +161,8 @@ export default function QuickTaskModal({ isOpen, onClose, onSubmit, isSubmitting
               disabled={isSubmitting}
               className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:opacity-50 text-white text-xs font-bold shadow-sm shadow-indigo-600/30 transition-all"
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>{isSubmitting ? 'Adding...' : 'Add Task'}</span>
+              {initialData ? <Save className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+              <span>{isSubmitting ? 'Saving...' : initialData ? 'Save Task' : 'Add Task'}</span>
             </button>
           </div>
         </form>

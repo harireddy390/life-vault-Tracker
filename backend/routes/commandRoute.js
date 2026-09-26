@@ -10,6 +10,7 @@ const Goal = require('../models/goals');
 const LearningTopic = require('../models/LearningTopic');
 const ActivityLog = require('../models/ActivityLog');
 const WeeklyReflection = require('../models/WeeklyReflection');
+const RoutineReminderLog = require('../models/RoutineReminderLog');
 const {
   getISTDateStr,
   getISTTimeString,
@@ -417,16 +418,58 @@ router.put('/schedule/:id', protect, async (req, res) => {
     const block = await ScheduleBlock.findOne({ _id: req.params.id, user: req.user.id });
     if (!block) return res.status(404).json({ message: 'Schedule block not found' });
 
-    const allowedFields = [
-      'title', 'description', 'startTime', 'endTime', 'daysOfWeek',
-      'isRecurring', 'date', 'category', 'priority'
-    ];
-    for (const key of allowedFields) {
-      if (req.body[key] !== undefined) {
-        block[key] = req.body[key];
-      }
+    const prevStartTime = block.startTime;
+    const prevDate = block.date;
+
+    if (req.body.title !== undefined) {
+      const trimmed = String(req.body.title).trim();
+      if (!trimmed) return res.status(400).json({ message: 'Routine title is required' });
+      block.title = trimmed;
     }
+    if (req.body.description !== undefined) {
+      block.description = String(req.body.description).trim();
+    }
+    if (req.body.startTime !== undefined) {
+      const trimmed = String(req.body.startTime).trim();
+      if (!trimmed) return res.status(400).json({ message: 'Start time is required' });
+      block.startTime = trimmed;
+    }
+    if (req.body.endTime !== undefined) {
+      const trimmed = String(req.body.endTime).trim();
+      if (!trimmed) return res.status(400).json({ message: 'End time is required' });
+      block.endTime = trimmed;
+    }
+    if (req.body.category !== undefined) {
+      block.category = req.body.category;
+    }
+    if (req.body.priority !== undefined) {
+      block.priority = req.body.priority;
+    }
+    if (req.body.isRecurring !== undefined) {
+      block.isRecurring = Boolean(req.body.isRecurring);
+    }
+    if (block.isRecurring) {
+      block.date = null;
+    } else if (req.body.date !== undefined) {
+      block.date = req.body.date || getISTDateStr();
+    } else if (!block.date) {
+      block.date = getISTDateStr();
+    }
+    if (req.body.daysOfWeek !== undefined && Array.isArray(req.body.daysOfWeek)) {
+      block.daysOfWeek = req.body.daysOfWeek;
+    }
+
     await block.save();
+
+    // Clear previous reminder logs if timing or schedule was modified so upcoming reminders trigger accurately
+    const scheduleChanged =
+      (req.body.startTime !== undefined && block.startTime !== prevStartTime) ||
+      (req.body.date !== undefined && block.date !== prevDate) ||
+      req.body.daysOfWeek !== undefined;
+
+    if (scheduleChanged) {
+      await RoutineReminderLog.deleteMany({ scheduleBlock: block._id, user: req.user.id }).catch(() => {});
+    }
 
     res.json(block);
   } catch (err) {
@@ -439,6 +482,7 @@ router.delete('/schedule/:id', protect, async (req, res) => {
   try {
     const block = await ScheduleBlock.findOneAndDelete({ _id: req.params.id, user: req.user.id });
     if (!block) return res.status(404).json({ message: 'Schedule block not found' });
+    await RoutineReminderLog.deleteMany({ scheduleBlock: req.params.id, user: req.user.id }).catch(() => {});
     res.json({ message: 'Block removed' });
   } catch (err) {
     res.status(500).json({ message: err.message });

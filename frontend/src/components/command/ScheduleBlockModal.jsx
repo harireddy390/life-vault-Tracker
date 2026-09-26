@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Clock, Save, Trash2, Tag, AlertCircle } from 'lucide-react';
+import { X, Calendar, Clock, Save, Trash2, Tag, AlertCircle, Bell } from 'lucide-react';
 
 const CATEGORIES = [
   { id: 'routine', label: 'Routine / Habit', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
@@ -39,11 +39,13 @@ export default function ScheduleBlockModal({
     priority: 'medium',
     daysOfWeek: [1, 2, 3, 4, 5],
     isRecurring: true,
+    date: '',
   });
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (initialData) {
+      const isRec = initialData.isRecurring !== undefined ? Boolean(initialData.isRecurring) : true;
       setFormData({
         title: initialData.title || '',
         description: initialData.description || '',
@@ -51,8 +53,11 @@ export default function ScheduleBlockModal({
         endTime: initialData.endTime || '10:00',
         category: initialData.category || 'routine',
         priority: initialData.priority || 'medium',
-        daysOfWeek: initialData.daysOfWeek || [1, 2, 3, 4, 5],
-        isRecurring: initialData.isRecurring !== undefined ? initialData.isRecurring : true,
+        daysOfWeek: Array.isArray(initialData.daysOfWeek) && initialData.daysOfWeek.length > 0
+          ? initialData.daysOfWeek
+          : [1, 2, 3, 4, 5],
+        isRecurring: isRec,
+        date: initialData.date || new Date().toISOString().split('T')[0],
       });
     } else {
       setFormData({
@@ -64,6 +69,7 @@ export default function ScheduleBlockModal({
         priority: 'medium',
         daysOfWeek: [1, 2, 3, 4, 5],
         isRecurring: true,
+        date: new Date().toISOString().split('T')[0],
       });
     }
     setError('');
@@ -81,6 +87,26 @@ export default function ScheduleBlockModal({
     }
   };
 
+  const calculateDuration = () => {
+    if (!formData.startTime || !formData.endTime) return '';
+    try {
+      const [sh, sm] = formData.startTime.split(':').map(Number);
+      const [eh, em] = formData.endTime.split(':').map(Number);
+      const sMin = sh * 60 + sm;
+      const eMin = eh * 60 + em;
+      const diff = eMin >= sMin ? eMin - sMin : 1440 - sMin + eMin;
+      const h = Math.floor(diff / 60);
+      const m = diff % 60;
+      if (h > 0 && m > 0) return `${h}h ${m}m`;
+      if (h > 0) return `${h}h`;
+      return `${m}m`;
+    } catch {
+      return '';
+    }
+  };
+
+  const durationStr = calculateDuration();
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!formData.title.trim()) {
@@ -95,8 +121,17 @@ export default function ScheduleBlockModal({
       setError('Please select at least one active day');
       return;
     }
+    if (!formData.isRecurring && !formData.date) {
+      setError('Please select a date for this routine');
+      return;
+    }
 
-    onSubmit(formData);
+    onSubmit({
+      ...formData,
+      title: formData.title.trim(),
+      description: formData.description.trim(),
+      date: formData.isRecurring ? null : (formData.date || null),
+    });
   };
 
   return (
@@ -148,31 +183,39 @@ export default function ScheduleBlockModal({
           </div>
 
           {/* Time Range in 24h format */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Start Time (HH:mm) <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="time"
-                value={formData.startTime}
-                onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                className="w-full px-3.5 py-2 text-xs sm:text-sm bg-white border border-slate-300 rounded-xl text-slate-900 font-mono focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-                required
-              />
+          <div className="space-y-1.5">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Start Time (HH:mm) <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="time"
+                  value={formData.startTime}
+                  onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+                  className="w-full px-3.5 py-2 text-xs sm:text-sm bg-white border border-slate-300 rounded-xl text-slate-900 font-mono focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  End Time (HH:mm) <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="time"
+                  value={formData.endTime}
+                  onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
+                  className="w-full px-3.5 py-2 text-xs sm:text-sm bg-white border border-slate-300 rounded-xl text-slate-900 font-mono focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                  required
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                End Time (HH:mm) <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="time"
-                value={formData.endTime}
-                onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
-                className="w-full px-3.5 py-2 text-xs sm:text-sm bg-white border border-slate-300 rounded-xl text-slate-900 font-mono focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-                required
-              />
-            </div>
+            {durationStr && (
+              <div className="text-[11px] font-semibold text-slate-500 flex items-center gap-1.5 pl-0.5">
+                <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Duration: <strong className="text-indigo-600">{durationStr}</strong></span>
+              </div>
+            )}
           </div>
 
           {/* Category Selector */}
@@ -198,7 +241,7 @@ export default function ScheduleBlockModal({
             </div>
           </div>
 
-          {/* Recurring Toggle & Days Selector */}
+          {/* Recurring Toggle & Days Selector / Date Picker */}
           <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-3">
             <div className="flex items-center justify-between">
               <div>
@@ -209,12 +252,19 @@ export default function ScheduleBlockModal({
                 type="checkbox"
                 id="isRecurring"
                 checked={formData.isRecurring}
-                onChange={(e) => setFormData({ ...formData, isRecurring: e.target.checked })}
-                className="w-4 h-4 rounded-sm border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                onChange={(e) => {
+                  const isRec = e.target.checked;
+                  setFormData({
+                    ...formData,
+                    isRecurring: isRec,
+                    date: isRec ? '' : (formData.date || new Date().toISOString().split('T')[0]),
+                  });
+                }}
+                className="w-4 h-4 rounded-sm border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
               />
             </div>
 
-            {formData.isRecurring && (
+            {formData.isRecurring ? (
               <div>
                 <span className="text-[11px] font-bold text-slate-600 block mb-1.5">Repeat on Days:</span>
                 <div className="flex gap-1">
@@ -237,7 +287,29 @@ export default function ScheduleBlockModal({
                   })}
                 </div>
               </div>
+            ) : (
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Routine Date:</span> <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={formData.date || ''}
+                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                  className="w-full px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-xl text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                  required={!formData.isRecurring}
+                />
+              </div>
             )}
+          </div>
+
+          {/* Routine Reminder Notification Info */}
+          <div className="p-3 rounded-xl border border-indigo-100 bg-indigo-50/50 flex items-start gap-2.5 text-xs text-indigo-900">
+            <Bell className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+            <div className="text-[11px] leading-relaxed text-indigo-950">
+              <strong className="font-bold">Routine Reminders:</strong> Push alerts dispatch automatically <strong>5 minutes before</strong> {formData.startTime || 'start time'} on your subscribed devices.
+            </div>
           </div>
 
           {/* Priority */}
