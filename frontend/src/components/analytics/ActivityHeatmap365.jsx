@@ -124,9 +124,9 @@ export default function ActivityHeatmap365({ heatmapData = [] }) {
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm mb-8 transition-all hover:shadow-md">
+    <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm mb-8 transition-all hover:shadow-md w-full max-w-full overflow-hidden box-border min-w-0">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 w-full max-w-full min-w-0">
         <div>
           <div className="flex items-center gap-2">
             <Calendar className="w-5 h-5 text-indigo-600" />
@@ -139,7 +139,7 @@ export default function ActivityHeatmap365({ heatmapData = [] }) {
         </div>
 
         {/* Filter Pills (Matching category pill style) */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full w-full sm:w-auto">
           {filters.map((f) => (
             <button
               key={f.id}
@@ -157,7 +157,7 @@ export default function ActivityHeatmap365({ heatmapData = [] }) {
       </div>
 
       {/* Grid Container */}
-      <div className="relative overflow-x-auto pb-3">
+      <div className="relative overflow-x-auto pb-3 w-full max-w-full box-border" style={{ WebkitOverflowScrolling: 'touch' }}>
         <div className="min-w-[760px]">
           
           {/* Month Header row */}

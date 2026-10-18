@@ -112,7 +112,17 @@ export default function StepCounter() {
   const offset = circumference - (percentage / 100) * circumference;
 
   return (
-    <div className="card panel step-panel flex flex-col relative" style={{ padding: '1.25rem', overflow: 'hidden' }}>
+    <div
+      className="card panel step-panel flex flex-col relative"
+      style={{
+        padding: '1.25rem',
+        overflow: 'hidden',
+        width: '100%',
+        maxWidth: '100%',
+        minWidth: 0,
+        boxSizing: 'border-box',
+      }}
+    >
       {/* Header */}
       <div className="flex justify-between items-center mb-3">
         <p className="panel-eyebrow m-0 flex items-center gap-2">
@@ -182,7 +192,17 @@ export default function StepCounter() {
       </div>
 
       {/* Sensor vs Manual Breakdown Pills */}
-      <div className="grid grid-cols-2 gap-2 mb-3 text-center">
+      <div
+        className="grid gap-2 mb-3 text-center"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+          gap: '8px',
+          width: '100%',
+          maxWidth: '100%',
+          boxSizing: 'border-box',
+        }}
+      >
         <div className="p-2 rounded-lg" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
           <span className="text-[10px] uppercase font-bold tracking-wider block" style={{ color: 'var(--text-muted)' }}>
             Live Sensor
@@ -202,7 +222,7 @@ export default function StepCounter() {
       </div>
 
       {/* Hardware Sensor Status Section */}
-      <div className="p-3 rounded-lg mb-3 flex flex-col gap-2" style={{ border: '1px solid var(--border-strong)', background: 'var(--surface-muted)' }}>
+      <div className="p-3 rounded-lg mb-3 flex flex-col gap-2" style={{ border: '1px solid var(--border-strong)', background: 'var(--surface-muted)', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
         {sensorStatus === 'tracking' && (
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -225,6 +245,7 @@ export default function StepCounter() {
             </p>
             <button
               className="btn btn-primary btn-sm full-width"
+              style={{ width: '100%', maxWidth: '100%', whiteSpace: 'normal', boxSizing: 'border-box' }}
               onClick={handleEnableSensor}
               disabled={actionLoading}
             >
@@ -258,19 +279,19 @@ export default function StepCounter() {
       </p>
 
       {/* Manual Entry Section */}
-      <div className="manual-entry flex items-center gap-2 mt-auto pt-2" style={{ borderTop: '1px solid var(--border)' }}>
+      <div className="manual-entry flex items-center gap-2 mt-auto pt-2 w-full max-w-full" style={{ borderTop: '1px solid var(--border)', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
         <input
           type="number"
           min="0"
-          className="input flex-1 p-2"
+          className="input flex-1 p-2 min-w-0"
           placeholder="Manual steps (e.g. treadmill)..."
           style={{ fontSize: '0.8125rem' }}
           value={inputManual}
           onChange={(e) => setInputManual(e.target.value)}
         />
         <button
-          className="btn btn-secondary btn-sm"
-          style={{ padding: '0.45rem 0.75rem', fontSize: '0.75rem', fontWeight: 600 }}
+          className="btn btn-secondary btn-sm shrink-0"
+          style={{ padding: '0.45rem 0.75rem', fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap' }}
           onClick={handleSaveManualSteps}
         >
           Log Manual

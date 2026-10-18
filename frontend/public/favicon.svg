@@ -1,23 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
   <defs>
     <linearGradient id="cyber-blade-left-fav" x1="8" y1="8" x2="24" y2="40" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#38BDF8" />
-      <stop offset="100%" stop-color="#3B82F6" />
+      <stop offset="0%" stop-color="#2596FF" />
+      <stop offset="100%" stop-color="#1D7AFC" />
     </linearGradient>
     <linearGradient id="cyber-blade-right-fav" x1="32" y1="8" x2="24" y2="40" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#6366F1" />
-      <stop offset="100%" stop-color="#1E1B4B" />
+      <stop offset="0%" stop-color="#4F46E5" />
+      <stop offset="100%" stop-color="#3730A3" />
     </linearGradient>
-    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="0" stdDeviation="2" flood-color="#38BDF8" flood-opacity="0.5" />
+    <filter id="subtle-shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#4F46E5" flood-opacity="0.25" />
     </filter>
   </defs>
 
-  <g filter="url(#glow)">
-    <!-- Left Blade -->
+  <!-- Pure White Background -->
+  <rect width="48" height="48" rx="10" fill="#FFFFFF" />
+
+  <g filter="url(#subtle-shadow)">
+    <!-- Left Blade (Bright Cyan-Blue #2596FF -> #1D7AFC) -->
     <path d="M8 10L24 40L24 24L16 8L8 10Z" fill="url(#cyber-blade-left-fav)" />
 
-    <!-- Right Blade -->
+    <!-- Right Blade (Royal Indigo #4F46E5 -> #3730A3) -->
     <path d="M40 10L24 40L24 24L32 8L40 10Z" fill="url(#cyber-blade-right-fav)" />
 
     <!-- Center Apex Core -->

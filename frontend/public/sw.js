@@ -1,15 +1,96 @@
 /**
- * Life Vault Service Worker — Web Push Routine Reminders
+ * Life Vault Service Worker — Web Push Routine Reminders & Offline PWA App Shell
  */
 
+const CACHE_NAME = 'lifevault-cache-v2';
+
+const PRECACHE_URLS = [
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/favicon.svg',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/icon-maskable-192.png',
+  '/icons/icon-maskable-512.png',
+  '/icons/apple-touch-icon.png',
+  '/icons/badge-72.png',
+];
+
+// Pre-cache core app shell assets on install
 self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(PRECACHE_URLS).catch((err) => {
+        console.warn('[SW] Precache non-critical issue:', err);
+      });
+    })
+  );
   self.skipWaiting();
 });
 
+// Purge obsolete caches on activate
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches.keys().then((keys) => {
+      return Promise.all(
+        keys.map((key) => {
+          if (key !== CACHE_NAME) {
+            return caches.delete(key);
+          }
+        })
+      );
+    }).then(() => self.clients.claim())
+  );
 });
 
+// Network-First with Cache Fallback for offline PWA navigation and app shell
+self.addEventListener('fetch', (event) => {
+  // Only handle GET requests
+  if (event.request.method !== 'GET') return;
+
+  const url = new URL(event.request.url);
+
+  // Bypass API calls, authentication, and file uploads directly to network
+  if (url.pathname.startsWith('/api') || url.pathname.startsWith('/uploads')) {
+    return;
+  }
+
+  event.respondWith(
+    fetch(event.request)
+      .then((networkResponse) => {
+        // Cache successful responses for offline use
+        if (networkResponse && networkResponse.status === 200) {
+          const clone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, clone).catch(() => {});
+          });
+        }
+        return networkResponse;
+      })
+      .catch(async () => {
+        // Fallback to cache when offline
+        const cachedResponse = await caches.match(event.request);
+        if (cachedResponse) return cachedResponse;
+
+        // If SPA navigation request, fallback to cached index.html
+        if (event.request.mode === 'navigate' || event.request.headers.get('accept')?.includes('text/html')) {
+          const indexCached = await caches.match('/index.html');
+          if (indexCached) return indexCached;
+        }
+
+        return new Response('You are offline. Please reconnect to access updated data.', {
+          status: 503,
+          statusText: 'Service Unavailable',
+          headers: { 'Content-Type': 'text/plain' },
+        });
+      })
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Web Push Notifications
+// ---------------------------------------------------------------------------
 self.addEventListener('push', (event) => {
   let data = {
     title: '🔔 Life Vault Reminder',
@@ -32,8 +113,8 @@ self.addEventListener('push', (event) => {
   const title = data.title || '🔔 Life Vault Reminder';
   const options = {
     body: data.body || 'Your scheduled routine starts soon.',
-    icon: '/icons/icon-192.png',
-    badge: '/icons/badge-72.png',
+    icon: '/icons/icon-192.png?v=2',
+    badge: '/icons/badge-72.png?v=2',
     vibrate: [120, 60, 120],
     data: data.data || { url: '/command' },
     tag: data.tag || 'routine-reminder',
@@ -95,4 +176,3 @@ self.addEventListener('message', (event) => {
     }
   }
 });
-

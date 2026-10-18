@@ -173,7 +173,10 @@ export default function AppLayout({ children }) {
   const userInitial = user?.name ? user.name[0].toUpperCase() : '?';
 
   return (
-    <div className="app-layout-root min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col relative selection:bg-purple-100 selection:text-purple-900 w-full max-w-full overflow-x-hidden">
+    <div
+      className="app-layout-root min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col relative selection:bg-purple-100 selection:text-purple-900 w-full max-w-[100vw] overflow-x-clip box-border"
+      style={{ overflowX: 'clip', maxWidth: '100vw', width: '100%', boxSizing: 'border-box', position: 'relative' }}
+    >
       {/* ========================================================================= */}
       {/* 1. GLASSMORPHIC TOP NAVBAR (Desktop & Mobile Unified Header)               */}
       {/* ========================================================================= */}
@@ -555,7 +558,7 @@ export default function AppLayout({ children }) {
           </button>
 
           {/* User profile info in drawer */}
-          <div className="mt-2 pt-2 border-t border-slate-200/60 flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl bg-white border border-slate-200/70">
+          <div className="mt-2 pt-2 border-t flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl bg-white border border-slate-200/70">
             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-violet-600 to-purple-600 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm">
               {userInitial}
             </div>
@@ -570,7 +573,10 @@ export default function AppLayout({ children }) {
       {/* ========================================================================= */}
       {/* 3. MAIN DASHBOARD CONTENT AREA                                            */}
       {/* ========================================================================= */}
-      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-28 md:pb-12 overflow-y-auto min-w-0 -webkit-overflow-scrolling-touch">
+      <main
+        className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-28 md:pb-12 overflow-y-auto min-w-0 -webkit-overflow-scrolling-touch overflow-x-clip box-border relative"
+        style={{ overflowX: 'clip', maxWidth: '100vw', width: '100%', boxSizing: 'border-box', position: 'relative' }}
+      >
         {children || <Outlet />}
       </main>
 

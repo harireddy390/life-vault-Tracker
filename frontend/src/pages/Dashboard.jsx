@@ -349,12 +349,18 @@ export default function Dashboard() {
               ) : (
                 <ul className="doc-mini-list m-0 p-0" style={{ listStyle: 'none' }}>
                   {docs.slice(0, 3).map(doc => (
-                    <li key={doc._id} className="doc-mini-row flex justify-between items-center py-2 text-sm" style={{ borderBottom: '1px solid var(--border)' }}>
-                      <div className="flex items-center gap-2 overflow-hidden">
-                        <span>📄</span>
-                        <span className="doc-mini-name truncate whitespace-nowrap">{doc.originalName}</span>
+                    <li key={doc._id} className="doc-mini-row flex justify-between items-center py-2 text-sm" style={{ borderBottom: '1px solid var(--border)', width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+                      <div className="flex items-center gap-2 overflow-hidden min-w-0 flex-1">
+                        <span className="shrink-0">📄</span>
+                        <span
+                          className="doc-mini-name truncate"
+                          style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', minWidth: 0, display: 'block' }}
+                          title={doc.originalName}
+                        >
+                          {doc.originalName}
+                        </span>
                       </div>
-                      <span className="doc-mini-date text-xs whitespace-nowrap ml-2" style={{ color: 'var(--text-muted)' }}>
+                      <span className="doc-mini-date text-xs whitespace-nowrap ml-2 shrink-0" style={{ color: 'var(--text-muted)' }}>
                         {new Date(doc.createdAt).toLocaleDateString()}
                       </span>
                     </li>

@@ -65,47 +65,60 @@ export default function HolisticBalanceWheel({ radarData, onSelectDomain }) {
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-sm flex flex-col items-center relative transition-all hover:shadow-md h-full">
+    <div
+      className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-sm flex flex-col items-center relative transition-all hover:shadow-md h-full w-full max-w-full"
+      style={{ width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box', overflow: 'hidden' }}
+    >
       {/* Header */}
-      <div className="w-full flex items-center justify-between mb-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h3 className="text-lg font-bold text-slate-900 tracking-tight">Holistic Balance Wheel</h3>
-            
-            {/* Onboarding Micro-Badge with Tooltip */}
-            <div className="relative inline-flex items-center">
-              <span className="inline-flex items-center gap-1.5 text-xs bg-cyan-50 text-cyan-800 border border-cyan-200 px-2.5 py-0.5 rounded-full font-semibold">
-                <span>5-Domain Index</span>
-                <button
-                  type="button"
-                  onMouseEnter={() => setShowInfoTooltip(true)}
-                  onMouseLeave={() => setShowInfoTooltip(false)}
-                  onClick={() => setShowInfoTooltip((prev) => !prev)}
-                  className="text-cyan-600 hover:text-cyan-800 transition-colors focus:outline-none cursor-pointer"
-                  title="Click for calculation details"
-                  aria-label="Info about Life Score"
-                >
-                  <Info className="w-3.5 h-3.5" />
-                </button>
-              </span>
+      <div
+        className="w-full flex flex-wrap gap-2 justify-between items-center mb-3 max-w-full min-w-0"
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '8px',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          maxWidth: '100%',
+          minWidth: 0,
+          boxSizing: 'border-box',
+        }}
+      >
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">Holistic Balance Wheel</h3>
+          
+          {/* Onboarding Micro-Badge with Tooltip */}
+          <div className="relative inline-flex items-center shrink-0">
+            <span className="inline-flex items-center gap-1.5 text-xs bg-cyan-50 text-cyan-800 border border-cyan-200 px-2.5 py-0.5 rounded-full font-semibold">
+              <span>5-Domain Index</span>
+              <button
+                type="button"
+                onMouseEnter={() => setShowInfoTooltip(true)}
+                onMouseLeave={() => setShowInfoTooltip(false)}
+                onClick={() => setShowInfoTooltip((prev) => !prev)}
+                className="text-cyan-600 hover:text-cyan-800 transition-colors focus:outline-none cursor-pointer"
+                title="Click for calculation details"
+                aria-label="Info about Life Score"
+              >
+                <Info className="w-3.5 h-3.5" />
+              </button>
+            </span>
 
-              {showInfoTooltip && (
-                <div className="absolute left-0 top-full mt-2 z-40 w-72 p-3 rounded-xl bg-slate-900 text-white text-xs font-normal shadow-2xl border border-slate-700 animate-in fade-in zoom-in-95">
-                  <div className="font-semibold text-cyan-400 mb-1 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>Algorithmic Grounding</span>
-                  </div>
-                  <p className="text-slate-200 leading-relaxed">
-                    Your Life Score is calculated from your actual daily logs, vitals, and completed milestones—not guesses.
-                  </p>
+            {showInfoTooltip && (
+              <div className="absolute left-0 top-full mt-2 z-40 w-72 p-3 rounded-xl bg-slate-900 text-white text-xs font-normal shadow-2xl border border-slate-700 animate-in fade-in zoom-in-95">
+                <div className="font-semibold text-cyan-400 mb-1 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Algorithmic Grounding</span>
                 </div>
-              )}
-            </div>
+                <p className="text-slate-200 leading-relaxed">
+                  Your Life Score is calculated from your actual daily logs, vitals, and completed milestones—not guesses.
+                </p>
+              </div>
+            )}
           </div>
         </div>
         
-        {/* Legend */}
-        <div className="flex items-center gap-3.5 text-xs">
+        {/* Legend / Toggles */}
+        <div className="flex items-center gap-3 text-xs shrink-0 flex-wrap">
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 shadow-sm" />
             <span className="text-slate-700 font-medium">Current</span>
@@ -118,7 +131,7 @@ export default function HolisticBalanceWheel({ radarData, onSelectDomain }) {
       </div>
 
       {/* Explicit High-Visibility Microcopy Hint Call-to-Action */}
-      <div className="w-full mb-2 px-3.5 py-2 rounded-xl bg-cyan-50/90 border border-cyan-200/90 flex items-center justify-between text-xs text-cyan-950 shadow-sm transition-all hover:bg-cyan-50">
+      <div className="w-full mb-2 px-3.5 py-2 rounded-xl bg-cyan-50/90 border border-cyan-200/90 flex items-center justify-between text-xs text-cyan-950 shadow-sm transition-all hover:bg-cyan-50 box-border">
         <span className="flex items-center gap-2 font-medium">
           <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse shrink-0" />
           <span>Tap any node (Health, Goals, Vault, Habits, Mindset) to see your score drivers & tips.</span>
@@ -129,8 +142,11 @@ export default function HolisticBalanceWheel({ radarData, onSelectDomain }) {
       </div>
 
       {/* SVG Radar Chart */}
-      <div className="relative w-full max-w-[380px] aspect-square flex items-center justify-center my-1">
-        <svg className="w-full h-full overflow-visible" viewBox={`0 0 ${size} ${size}`}>
+      <div
+        className="relative w-full max-w-[380px] aspect-square flex items-center justify-center my-1"
+        style={{ width: '100%', maxWidth: '380px', overflowX: 'auto', boxSizing: 'border-box' }}
+      >
+        <svg className="w-full h-full max-w-full overflow-visible" viewBox={`0 0 ${size} ${size}`}>
           <defs>
             {/* Cyan/Teal Gradient Glow for Current Polygon */}
             <radialGradient id="radarCyanTealGlow" cx="50%" cy="50%" r="50%">

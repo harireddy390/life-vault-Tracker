@@ -2,18 +2,29 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .dbv2-header {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .dbv2-topics {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .dbv2-topic-btn {
@@ -34,7 +45,7 @@
   color: var(--gold-600);
 }
 
-.dbv2-question { display: flex; flex-direction: column; gap: var(--space-1); }
+.dbv2-question { display: flex; flex-direction: column; gap: var(--space-1); width: 100%; max-width: 100%; box-sizing: border-box; }
 .dbv2-q-label { font-size: 12px; font-weight: 600; color: var(--text-muted); margin: 0; }
 .dbv2-q-text {
   font-size: 14px;
@@ -46,7 +57,10 @@
   color: var(--text-primary);
   display: block;
   white-space: pre-wrap;
-  word-break: break-all;
+  word-break: break-word;
+  max-width: 100%;
+  overflow-x: auto;
+  box-sizing: border-box;
 }
 
 /* Reveal button */
@@ -111,6 +125,10 @@
   min-height: 80px;
   color: var(--text-primary);
   background: var(--surface-muted);
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  box-sizing: border-box;
 }
 
 .dbv2-expected {
