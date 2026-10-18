@@ -44,6 +44,7 @@ public class StepTrackingForegroundService extends Service implements SensorEven
     public static final String ACTION_START = "com.lifevault.app.action.START_TRACKING";
     public static final String ACTION_STOP = "com.lifevault.app.action.STOP_TRACKING";
     public static final String ACTION_STEP_UPDATE = "com.lifevault.app.action.STEP_UPDATE";
+    public static final String ACTION_RESET = "com.lifevault.app.action.RESET";
 
     private SensorManager sensorManager;
     private Sensor stepCounterSensor;
@@ -87,6 +88,17 @@ public class StepTrackingForegroundService extends Service implements SensorEven
         if (ACTION_STOP.equals(action)) {
             stopTrackingService();
             return START_NOT_STICKY;
+        }
+
+        if (ACTION_RESET.equals(action)) {
+            todaySteps = 0;
+            if (lastHardwareReading > 0) {
+                baselineCounter = lastHardwareReading;
+            }
+            saveStepState(currentDate, todaySteps, baselineCounter, lastHardwareReading);
+            updateNotification(todaySteps);
+            broadcastStepUpdate(todaySteps, currentDate);
+            return START_STICKY;
         }
 
         // Start Foreground with persistent sticky notification

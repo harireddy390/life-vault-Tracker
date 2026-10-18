@@ -21,7 +21,11 @@ router.post('/', protect, async (req, res) => {
 
     if (sensorSteps !== undefined && sensorSteps !== null) {
       const parsedSensor = Math.max(0, parseInt(sensorSteps, 10) || 0);
-      finalSensorSteps = Math.max(finalSensorSteps, parsedSensor);
+      if (req.body.resetSensor || req.body.isReset || source === 'reset') {
+        finalSensorSteps = parsedSensor;
+      } else {
+        finalSensorSteps = Math.max(finalSensorSteps, parsedSensor);
+      }
       lastSensorSync = new Date();
     }
 

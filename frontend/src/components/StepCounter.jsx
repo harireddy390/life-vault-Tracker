@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { RotateCcw } from 'lucide-react';
 import { toLocalDateString } from '../utils/date';
 import stepService from '../services/stepService';
 import authService from '../services/authService';
@@ -17,6 +18,7 @@ export default function StepCounter() {
   const [isEditingTarget, setIsEditingTarget] = useState(false);
   const [tempTarget, setTempTarget] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   useEffect(() => {
     let unsubscribe = null;
@@ -58,6 +60,20 @@ export default function StepCounter() {
     };
   }, [today]);
 
+  const handleResetCounter = async () => {
+    try {
+      setIsResetting(true);
+      // Instantly reset React state for instant UI reaction
+      setSensorSteps(0);
+      // Reset across localStorage, IndexedDB, native bridge, and backend
+      await stepSensorService.resetTodaySteps();
+    } catch (err) {
+      console.error('[StepCounter] Failed to reset counter:', err);
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   const handleEnableSensor = async () => {
     setActionLoading(true);
     try {
@@ -68,10 +84,6 @@ export default function StepCounter() {
     } finally {
       setActionLoading(false);
     }
-  };
-
-  const handleStopSensor = () => {
-    stepSensorService.stopTracking();
   };
 
   const handleSaveManualSteps = async () => {
@@ -127,18 +139,48 @@ export default function StepCounter() {
     >
       {/* Header */}
       <div className="flex justify-between items-center mb-3">
-        <p className="panel-eyebrow m-0 flex items-center gap-2">
+        <p className="panel-eyebrow m-0 flex items-center gap-2 font-medium">
           <span>👟</span> Daily Movement
         </p>
-        <button 
-          className="btn btn-ghost btn-sm" 
-          style={{ padding: '4px 8px', fontSize: '12px', background: 'transparent' }} 
-          onClick={() => { setIsEditingTarget(true); setTempTarget(String(target)); }}
-          aria-label="Edit Step Target"
-          title="Edit Target"
-        >
-          ⚙️
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm flex items-center gap-1.5"
+            style={{
+              padding: '4px 8px',
+              fontSize: '12px',
+              background: 'transparent',
+              color: 'var(--text-muted)',
+              border: 'none',
+              cursor: 'pointer',
+              borderRadius: '6px',
+            }}
+            onClick={handleResetCounter}
+            disabled={isResetting}
+            aria-label="Reset Step Counter"
+            title="Reset Today's Steps to 0"
+          >
+            <RotateCcw className={`w-3.5 h-3.5 ${isResetting ? 'animate-spin' : ''}`} />
+            <span className="font-medium">Reset</span>
+          </button>
+          <button 
+            type="button"
+            className="btn btn-ghost btn-sm" 
+            style={{
+              padding: '4px 8px',
+              fontSize: '13px',
+              background: 'transparent',
+              color: 'var(--text-muted)',
+              border: 'none',
+              cursor: 'pointer',
+            }} 
+            onClick={() => { setIsEditingTarget(true); setTempTarget(String(target)); }}
+            aria-label="Edit Step Target"
+            title="Edit Daily Target"
+          >
+            ⚙️
+          </button>
+        </div>
       </div>
 
       {/* Target Edit Modal Inline */}
@@ -205,20 +247,20 @@ export default function StepCounter() {
           boxSizing: 'border-box',
         }}
       >
-        <div className="p-2 rounded-lg" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
-          <div className="flex items-center justify-center gap-1 mb-0.5">
+        <div className="p-2.5 rounded-lg" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
+          <div className="flex items-center justify-center gap-1.5 mb-0.5">
             <span className="text-[10px] uppercase font-bold tracking-wider" style={{ color: 'var(--text-muted)' }}>
               {isNative ? 'Hardware Chip' : 'Live Sensor'}
             </span>
-            {sensorStatus === 'native_tracking' && (
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            {(sensorStatus === 'native_tracking' || sensorStatus === 'tracking') && (
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" title="Sensor Active"></span>
             )}
           </div>
           <span className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>
             {sensorSteps.toLocaleString()}
           </span>
         </div>
-        <div className="p-2 rounded-lg" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
+        <div className="p-2.5 rounded-lg" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
           <span className="text-[10px] uppercase font-bold tracking-wider block mb-0.5" style={{ color: 'var(--text-muted)' }}>
             Manual Logged
           </span>
@@ -228,100 +270,24 @@ export default function StepCounter() {
         </div>
       </div>
 
-      {/* Hardware Sensor Status Section */}
-      <div className="p-3 rounded-lg mb-3 flex flex-col gap-2" style={{ border: '1px solid var(--border-strong)', background: 'var(--surface-muted)', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
-        {/* Native Hardware Background Tracking Active (Survives app close & recent apps clear) */}
-        {sensorStatus === 'native_tracking' && (
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              <div>
-                <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 m-0">
-                  Native Hardware Background Tracking Active 🟢
-                </p>
-                <p className="text-[10px] text-slate-500 m-0">
-                  Hardware step counter chip • Foreground Service • Auto-restart on boot • Persists across app closure
-                </p>
-              </div>
-            </div>
-            <button className="btn btn-ghost btn-sm" style={{ fontSize: '11px', padding: '2px 6px' }} onClick={handleStopSensor}>
-              Pause
-            </button>
-          </div>
-        )}
+      {/* Permission or Disabled prompt (minimal & non-intrusive) */}
+      {sensorStatus === 'permission_denied' && (
+        <div className="text-xs text-rose-500 text-center mb-2 px-1">
+          ⚠️ Motion sensor permission required for live tracking
+        </div>
+      )}
 
-        {/* Browser Physics Fallback Tracking Active */}
-        {sensorStatus === 'tracking' && (
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              <div>
-                <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 m-0">
-                  Live Physics Step Tracking: Active
-                </p>
-                <p className="text-[10px] text-slate-500 m-0">
-                  Vector physics (12.0 m/s² heel-strike filter) • Background worker & IndexedDB sync
-                </p>
-              </div>
-            </div>
-            <button className="btn btn-ghost btn-sm" style={{ fontSize: '11px', padding: '2px 6px' }} onClick={handleStopSensor}>
-              Pause
-            </button>
-          </div>
-        )}
-
-        {/* Disabled State */}
-        {sensorStatus === 'disabled' && (
-          <div className="flex flex-col gap-2">
-            <p className="text-xs text-slate-600 m-0">
-              {isNative
-                ? 'Persistent native hardware step tracking with Android Foreground Service. Survives app closure and device restart.'
-                : 'Live hardware motion tracking with realistic stride physics (12.0 m/s² heel-strike filter) and background persistence.'}
-            </p>
-            <button
-              className="btn btn-primary btn-sm full-width"
-              style={{ width: '100%', maxWidth: '100%', whiteSpace: 'normal', boxSizing: 'border-box' }}
-              onClick={handleEnableSensor}
-              disabled={actionLoading}
-            >
-              {actionLoading
-                ? 'Connecting Sensor...'
-                : isNative
-                ? '⚡ Enable Native Step Tracking (Hardware Sensor)'
-                : '⚡ Enable Step Tracking'}
-            </button>
-          </div>
-        )}
-
-        {/* Permission Denied */}
-        {sensorStatus === 'permission_denied' && (
-          <div className="text-xs text-rose-600 flex flex-col gap-1">
-            <span className="font-bold">⚠️ Step Sensor Permission Denied</span>
-            <span className="text-[11px] text-slate-500">
-              {isNative
-                ? 'Allow Physical Activity permission in your device App Settings to track hardware steps.'
-                : 'Allow Motion & Orientation access in your browser/device site settings to track physical steps.'}
-            </span>
-          </div>
-        )}
-
-        {/* Unsupported */}
-        {sensorStatus === 'unsupported' && (
-          <div className="text-xs text-slate-500 flex flex-col gap-1">
-            <span className="font-semibold text-slate-600">Live Step Tracking unavailable</span>
-            <span className="text-[11px]">
-              This browser/device does not provide a physical motion sensor. You can log manual steps below.
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Background Persistence Indicator */}
-      <p className="text-[10px] text-slate-400 text-center mb-3 leading-tight">
-        {sensorStatus === 'native_tracking' || isNative
-          ? 'Native Foreground Service & IndexedDB sync active. Step counts continuously update even when the app is swiped away.'
-          : 'Background Service Worker & IndexedDB sync enabled. Movement persists across app minimization and page reloads.'}
-      </p>
+      {sensorStatus === 'disabled' && (
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm mb-3 w-full"
+          style={{ fontSize: '11px', padding: '4px 8px' }}
+          onClick={handleEnableSensor}
+          disabled={actionLoading}
+        >
+          {actionLoading ? 'Connecting Sensor...' : '⚡ Enable Step Sensor'}
+        </button>
+      )}
 
       {/* Manual Entry Section */}
       <div className="manual-entry flex items-center gap-2 mt-auto pt-2 w-full max-w-full" style={{ borderTop: '1px solid var(--border)', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
@@ -335,6 +301,7 @@ export default function StepCounter() {
           onChange={(e) => setInputManual(e.target.value)}
         />
         <button
+          type="button"
           className="btn btn-secondary btn-sm shrink-0"
           style={{ padding: '0.45rem 0.75rem', fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap' }}
           onClick={handleSaveManualSteps}

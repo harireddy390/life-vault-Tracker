@@ -220,11 +220,10 @@ export default function AppLayout({ children }) {
                   to={item.to}
                   onMouseEnter={() => prefetchRoute(item.to)}
                   onTouchStart={() => prefetchRoute(item.to)}
-                  className={`inline-flex items-center gap-2 px-3 py-1.5 xl:px-3.5 xl:py-2 text-sm rounded-lg transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/30 ${
-                    active
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 xl:px-3.5 xl:py-2 text-sm rounded-lg transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/30 ${active
                       ? 'bg-slate-100 text-slate-900 font-semibold'
                       : 'text-slate-600 font-medium hover:bg-slate-50 hover:text-slate-900'
-                  }`}
+                    }`}
                 >
                   <Icon className={`w-4 h-4 shrink-0 transition-colors ${active ? 'text-slate-700' : 'text-slate-500'}`} />
                   <span className="truncate">{item.label}</span>
@@ -237,11 +236,10 @@ export default function AppLayout({ children }) {
               <button
                 type="button"
                 onClick={() => setIsMoreMenuOpen((prev) => !prev)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 xl:px-3.5 xl:py-2 text-sm rounded-lg transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/30 ${
-                  isAnyMoreItemActive
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 xl:px-3.5 xl:py-2 text-sm rounded-lg transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/30 ${isAnyMoreItemActive
                     ? 'bg-slate-100 text-slate-900 font-semibold'
                     : 'text-slate-600 font-medium hover:bg-slate-50 hover:text-slate-900'
-                }`}
+                  }`}
                 aria-expanded={isMoreMenuOpen}
                 aria-haspopup="menu"
                 aria-label="More navigation items"
@@ -264,11 +262,10 @@ export default function AppLayout({ children }) {
                         key={item.to}
                         to={item.to}
                         onClick={() => setIsMoreMenuOpen(false)}
-                        className={`flex items-center justify-between px-3.5 py-2 mx-1 rounded-lg text-sm transition-all duration-150 ${
-                          active
+                        className={`flex items-center justify-between px-3.5 py-2 mx-1 rounded-lg text-sm transition-all duration-150 ${active
                             ? 'bg-slate-100 text-slate-900 font-semibold'
                             : 'text-slate-600 font-medium hover:bg-slate-50 hover:text-slate-900'
-                        } ${item.danger ? 'text-rose-600 hover:text-rose-700 hover:bg-rose-50' : ''}`}
+                          } ${item.danger ? 'text-rose-600 hover:text-rose-700 hover:bg-rose-50' : ''}`}
                         role="menuitem"
                       >
                         <div className="flex items-center gap-2.5">
@@ -462,9 +459,8 @@ export default function AppLayout({ children }) {
 
       {/* Drawer Container */}
       <div
-        className={`mobile-drawer fixed top-0 left-0 bottom-0 z-50 w-72 max-w-[85vw] mobile-drawer-glass rounded-r-2xl flex flex-col overflow-hidden lg:hidden ${
-          isMobileMenuOpen ? 'mobile-drawer-open' : ''
-        }`}
+        className={`mobile-drawer fixed top-0 left-0 bottom-0 z-50 w-72 max-w-[85vw] mobile-drawer-glass rounded-r-2xl flex flex-col overflow-hidden lg:hidden ${isMobileMenuOpen ? 'mobile-drawer-open' : ''
+          }`}
         role="dialog"
         aria-label="Navigation drawer"
       >
@@ -525,9 +521,8 @@ export default function AppLayout({ children }) {
                     key={item.to}
                     to={item.to}
                     onClick={() => setIsMobileMenuOpen(false)}
-                    className={`sidebar-nav-link justify-between ${active ? 'sidebar-nav-link-active' : ''} ${
-                      item.danger ? 'text-rose-600 hover:bg-rose-50' : ''
-                    }`}
+                    className={`sidebar-nav-link justify-between ${active ? 'sidebar-nav-link-active' : ''} ${item.danger ? 'text-rose-600 hover:bg-rose-50' : ''
+                      }`}
                   >
                     <div className="flex items-center gap-3">
                       <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-violet-600' : item.danger ? 'text-rose-500' : 'text-slate-500'}`} />
@@ -685,9 +680,8 @@ export default function AppLayout({ children }) {
           onTouchStart={() => prefetchRoute('/dashboard')}
           className={() => {
             const active = isRouteActive('/dashboard');
-            return `flex flex-col items-center justify-center w-14 h-full transition-colors ${
-              active ? 'text-violet-600 font-semibold' : 'text-slate-500 hover:text-slate-800'
-            }`;
+            return `flex flex-col items-center justify-center w-14 h-full transition-colors ${active ? 'text-violet-600 font-semibold' : 'text-slate-500 hover:text-slate-800'
+              }`;
           }}
         >
           <LayoutDashboard className="w-5 h-5" />
@@ -704,9 +698,8 @@ export default function AppLayout({ children }) {
           onTouchStart={() => prefetchRoute('/goals')}
           className={() => {
             const active = isRouteActive('/goals');
-            return `flex flex-col items-center justify-center w-14 h-full transition-colors ${
-              active ? 'text-violet-600 font-semibold' : 'text-slate-500 hover:text-slate-800'
-            }`;
+            return `flex flex-col items-center justify-center w-14 h-full transition-colors ${active ? 'text-violet-600 font-semibold' : 'text-slate-500 hover:text-slate-800'
+              }`;
           }}
         >
           <Target className="w-5 h-5" />
@@ -737,9 +730,8 @@ export default function AppLayout({ children }) {
           onTouchStart={() => prefetchRoute('/health')}
           className={() => {
             const active = isRouteActive('/health');
-            return `flex flex-col items-center justify-center w-14 h-full transition-colors ${
-              active ? 'text-violet-600 font-semibold' : 'text-slate-500 hover:text-slate-800'
-            }`;
+            return `flex flex-col items-center justify-center w-14 h-full transition-colors ${active ? 'text-violet-600 font-semibold' : 'text-slate-500 hover:text-slate-800'
+              }`;
           }}
         >
           <HeartPulse className="w-5 h-5" />
@@ -756,9 +748,8 @@ export default function AppLayout({ children }) {
           onTouchStart={() => prefetchRoute('/progress')}
           className={() => {
             const active = isRouteActive('/progress');
-            return `flex flex-col items-center justify-center w-14 h-full transition-colors ${
-              active ? 'text-violet-600 font-semibold' : 'text-slate-500 hover:text-slate-800'
-            }`;
+            return `flex flex-col items-center justify-center w-14 h-full transition-colors ${active ? 'text-violet-600 font-semibold' : 'text-slate-500 hover:text-slate-800'
+              }`;
           }}
         >
           <BarChart3 className="w-5 h-5" />

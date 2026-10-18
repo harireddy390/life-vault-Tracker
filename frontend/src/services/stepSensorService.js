@@ -90,7 +90,14 @@ class StepSensorService {
       document.addEventListener('resume', this.boundVisibilityChange);
     }
 
-    const wasEnabled = localStorage.getItem(SENSOR_ENABLED_KEY) === 'true';
+    // Always connect native bridge listener (handles native background service & simulated browser events)
+    if (!this.nativeUnsubscribe) {
+      this.nativeUnsubscribe = nativeStepBridge.addStepListener((data) => {
+        this.handleNativeStepUpdate(data);
+      });
+    }
+
+    const wasEnabled = localStorage.getItem(SENSOR_ENABLED_KEY) !== 'false';
 
     // -------------------------------------------------------------------------
     // 1. Native Mobile Platform Check (Capacitor / Cordova)
@@ -166,12 +173,11 @@ class StepSensorService {
     }
 
     // Subscribe to live step updates from native service
-    if (this.nativeUnsubscribe) {
-      this.nativeUnsubscribe();
+    if (!this.nativeUnsubscribe) {
+      this.nativeUnsubscribe = nativeStepBridge.addStepListener((data) => {
+        this.handleNativeStepUpdate(data);
+      });
     }
-    this.nativeUnsubscribe = nativeStepBridge.addStepListener((data) => {
-      this.handleNativeStepUpdate(data);
-    });
 
     this.status = 'native_tracking';
     localStorage.setItem(SENSOR_ENABLED_KEY, 'true');
@@ -179,18 +185,35 @@ class StepSensorService {
   }
 
   /**
-   * Handles real-time step update emitted by the native hardware bridge
+   * Handles real-time step update emitted by the native hardware bridge or simulated event
    */
   handleNativeStepUpdate(data) {
     this.checkDayRollover();
-    if (data && typeof data.steps === 'number') {
+    if (!data) return;
+
+    if (data.isReset) {
+      this.sensorSteps = 0;
+      this.savePersistedCount();
+      this.notifyListeners();
+      return;
+    }
+
+    let changed = false;
+    if (typeof data.steps === 'number') {
       const incomingSteps = data.steps;
-      if (incomingSteps > this.sensorSteps) {
+      if (incomingSteps !== this.sensorSteps) {
         this.sensorSteps = incomingSteps;
-        this.savePersistedCount();
-        this.notifyListeners();
-        this.debounceBackendSync();
+        changed = true;
       }
+    } else if (typeof data.stepDelta === 'number') {
+      this.sensorSteps = Math.max(0, this.sensorSteps + data.stepDelta);
+      changed = true;
+    }
+
+    if (changed) {
+      this.savePersistedCount();
+      this.notifyListeners();
+      this.debounceBackendSync();
     }
   }
 
@@ -458,7 +481,12 @@ class StepSensorService {
   handleDeviceMotion(event) {
     this.checkDayRollover();
 
-    const acc = event.accelerationIncludingGravity || event.acceleration;
+    let acc = event.accelerationIncludingGravity;
+    let hasGravity = true;
+    if (!acc || (acc.x === null && acc.y === null && acc.z === null)) {
+      acc = event.acceleration;
+      hasGravity = false;
+    }
     if (!acc) return;
 
     const x = acc.x ?? 0;
@@ -469,7 +497,10 @@ class StepSensorService {
     if (x === 0 && y === 0 && z === 0) return;
 
     // 1. Calculate full 3D vector acceleration magnitude
-    const rawMagnitude = Math.sqrt(x * x + y * y + z * z);
+    let rawMagnitude = Math.sqrt(x * x + y * y + z * z);
+    if (!hasGravity) {
+      rawMagnitude += GRAVITY;
+    }
 
     // Reject extreme impacts (e.g. dropping phone on floor > 35 m/s²)
     if (rawMagnitude > MAX_VALID_ACCELERATION) {
@@ -571,6 +602,70 @@ class StepSensorService {
       this.savePersistedCount();
       this.notifyListeners();
     }
+  }
+
+  /**
+   * Instantly resets today's live/sensor step count to 0 across
+   * internal service state, localStorage, IndexedDB, native bridge, and backend.
+   */
+  async resetTodaySteps() {
+    this.sensorSteps = 0;
+    this.cadenceStreak = 0;
+    this.stridePhase = 'IDLE';
+    this.lastStepTimestamp = 0;
+    this.lastPeakTimestamp = 0;
+
+    // 1. Immediately reset localStorage
+    const key = `${SENSOR_STORAGE_KEY_PREFIX}${this.today}`;
+    try {
+      localStorage.setItem(key, '0');
+    } catch {}
+
+    // 2. Immediately reset IndexedDB
+    try {
+      await idbSet(key, 0);
+    } catch {}
+
+    // 3. Notify Service Worker for background state retention
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker?.controller) {
+      navigator.serviceWorker.controller.postMessage({
+        type: 'STEP_STATE_SYNC',
+        date: this.today,
+        steps: 0,
+      });
+    }
+
+    // 4. Notify Native bridge to reset hardware baseline
+    if (this.isNative || nativeStepBridge.isNativeEnvironment()) {
+      try {
+        await nativeStepBridge.resetSteps();
+      } catch (err) {
+        console.warn('[StepSensor] Native bridge resetSteps error:', err?.message);
+      }
+    }
+
+    // 5. Notify all UI listeners immediately so UI renders 0 without delay
+    this.notifyListeners();
+
+    // 6. Reset on backend
+    try {
+      if (this.syncTimeout) clearTimeout(this.syncTimeout);
+      await stepService.resetSensorSteps(this.today);
+    } catch (err) {
+      console.warn('[StepSensor] Backend resetSensorSteps warning:', err?.message);
+    }
+
+    return 0;
+  }
+
+  /**
+   * Helper to simulate or manually increment steps (for automated tests or live demo)
+   */
+  simulateSteps(count = 1) {
+    this.checkDayRollover();
+    this.sensorSteps += count;
+    this.onStepsIncremented();
+    return this.sensorSteps;
   }
 
   subscribe(listener) {

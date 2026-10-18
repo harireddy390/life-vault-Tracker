@@ -189,6 +189,38 @@ public class BackgroundStepPlugin extends Plugin {
         }
     }
 
+    @PluginMethod
+    public void resetSteps(PluginCall call) {
+        Context context = getContext();
+        try {
+            SharedPreferences prefs = context.getSharedPreferences(
+                StepTrackingForegroundService.PREFS_NAME,
+                Context.MODE_PRIVATE
+            );
+
+            float lastReading = prefs.getFloat(StepTrackingForegroundService.PREF_LAST_HARDWARE_READING, -1f);
+            prefs.edit()
+                .putInt(StepTrackingForegroundService.PREF_TODAY_STEPS, 0)
+                .putFloat(StepTrackingForegroundService.PREF_BASELINE_COUNTER, lastReading)
+                .apply();
+
+            try {
+                Intent serviceIntent = new Intent(context, StepTrackingForegroundService.class);
+                serviceIntent.setAction(StepTrackingForegroundService.ACTION_RESET);
+                context.startService(serviceIntent);
+            } catch (Exception ignored) {}
+
+            notifyStepUpdateFromService(0, getTodayDateString());
+
+            JSObject ret = new JSObject();
+            ret.put("success", true);
+            call.resolve(ret);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to reset steps in native plugin", e);
+            call.reject("Could not reset steps: " + e.getMessage());
+        }
+    }
+
     private String getTodayDateString() {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
         return sdf.format(new Date());

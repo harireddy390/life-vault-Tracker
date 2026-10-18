@@ -37,8 +37,7 @@ class NativeStepBridge {
     return Boolean(
       (Capacitor && typeof Capacitor.isNativePlatform === 'function' && Capacitor.isNativePlatform()) ||
       window.cordova ||
-      window.pedometer ||
-      this.plugin
+      window.pedometer
     );
   }
 
@@ -166,39 +165,110 @@ class NativeStepBridge {
   }
 
   /**
-   * Subscribes to live step updates emitted by the native service
+   * Resets today steps counter in native persistent storage
+   */
+  async resetSteps() {
+    if (!this.isNativeEnvironment()) return;
+
+    if (this.plugin && typeof this.plugin.resetSteps === 'function') {
+      try {
+        await this.plugin.resetSteps();
+      } catch (err) {
+        console.warn('[NativeStepBridge] resetSteps failed:', err?.message);
+      }
+    }
+  }
+
+  /**
+   * Subscribes to live step updates emitted by the native service or simulated browser events
    */
   addStepListener(callback) {
-    if (!this.isNativeEnvironment()) return () => {};
+    const unsubscribers = [];
 
-    if (this.plugin && typeof this.plugin.addListener === 'function') {
-      const handle = this.plugin.addListener('stepUpdate', (data) => {
-        callback(data);
-      });
-      return () => {
-        if (handle && typeof handle.remove === 'function') {
-          handle.remove();
+    // 1. Native Capacitor plugin listener
+    if (this.isNativeEnvironment() && this.plugin && typeof this.plugin.addListener === 'function') {
+      let isSubscribed = true;
+      let listenerHandle = null;
+
+      try {
+        const promiseOrHandle = this.plugin.addListener('stepUpdate', (data) => {
+          if (isSubscribed && data) {
+            callback(data);
+          }
+        });
+
+        if (promiseOrHandle && typeof promiseOrHandle.then === 'function') {
+          promiseOrHandle.then((handle) => {
+            listenerHandle = handle;
+            if (!isSubscribed && listenerHandle && typeof listenerHandle.remove === 'function') {
+              listenerHandle.remove();
+            }
+          }).catch((err) => {
+            console.warn('[NativeStepBridge] addListener error:', err?.message);
+          });
+        } else {
+          listenerHandle = promiseOrHandle;
+        }
+
+        unsubscribers.push(() => {
+          isSubscribed = false;
+          if (listenerHandle && typeof listenerHandle.remove === 'function') {
+            listenerHandle.remove();
+          }
+        });
+      } catch (err) {
+        console.warn('[NativeStepBridge] register stepUpdate listener error:', err);
+      }
+    }
+
+    // 2. Cordova pedometer listener
+    if (this.isNativeEnvironment() && typeof window !== 'undefined' && window.pedometer) {
+      try {
+        window.pedometer.startPedometerUpdates(
+          (data) => {
+            if (data && typeof data.numberOfSteps === 'number') {
+              callback({ steps: data.numberOfSteps, isNative: true });
+            }
+          },
+          (err) => console.warn('[NativeStepBridge] Cordova update error:', err)
+        );
+        unsubscribers.push(() => {
+          try {
+            window.pedometer.stopPedometerUpdates();
+          } catch {}
+        });
+      } catch (err) {
+        console.warn('[NativeStepBridge] Cordova startPedometerUpdates error:', err);
+      }
+    }
+
+    // 3. Web Window CustomEvent listener (supports simulated step events and test triggers)
+    if (typeof window !== 'undefined') {
+      const windowHandler = (event) => {
+        const payload = event.detail || event.data;
+        if (payload && (typeof payload.steps === 'number' || typeof payload.stepDelta === 'number')) {
+          callback(payload);
         }
       };
+
+      window.addEventListener('stepUpdate', windowHandler);
+      window.addEventListener('nativeStepUpdate', windowHandler);
+      unsubscribers.push(() => {
+        window.removeEventListener('stepUpdate', windowHandler);
+        window.removeEventListener('nativeStepUpdate', windowHandler);
+      });
     }
 
-    if (typeof window !== 'undefined' && window.pedometer) {
-      window.pedometer.startPedometerUpdates(
-        (data) => {
-          if (data && typeof data.numberOfSteps === 'number') {
-            callback({ steps: data.numberOfSteps, isNative: true });
-          }
-        },
-        (err) => console.warn('[NativeStepBridge] Cordova update error:', err)
-      );
-      return () => {
-        window.pedometer.stopPedometerUpdates();
-      };
-    }
-
-    return () => {};
+    return () => {
+      unsubscribers.forEach((unsub) => {
+        try {
+          unsub();
+        } catch {}
+      });
+    };
   }
 }
 
 export const nativeStepBridge = new NativeStepBridge();
 export default nativeStepBridge;
+

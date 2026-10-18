@@ -32,6 +32,14 @@ export const logSensorSteps = async (date, sensorSteps) => {
 };
 
 /**
+ * Reset live sensor steps specifically for a given date
+ */
+export const resetSensorSteps = async (date) => {
+    const { data } = await api.post('/steps', { date, sensorSteps: 0, resetSensor: true, source: 'reset' });
+    return data;
+};
+
+/**
  * Log or update manual steps specifically
  */
 export const logManualSteps = async (date, manualSteps) => {
@@ -43,5 +51,7 @@ export default {
     getSteps,
     logSteps,
     logSensorSteps,
+    resetSensorSteps,
     logManualSteps,
 };
+
