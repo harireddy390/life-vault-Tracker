@@ -1,0 +1,17 @@
+{
+  "appId": "com.lifevault.app",
+  "appName": "LifeVault",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "BackgroundPedometer": {
+      "notificationTitle": "LifeVault Step Tracker is active",
+      "notificationBody": "Counting physical steps via hardware sensor in the background",
+      "notificationIcon": "ic_stat_directions_walk",
+      "enableBootRestart": true
+    }
+  }
+}

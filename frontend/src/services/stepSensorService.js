@@ -1,24 +1,32 @@
 /**
  * Life Vault Hardware Motion Sensor & High-Precision Pedometer Service
  * 
- * Implements realistic physical step detection using W3C DeviceMotionEvent / Sensor API.
- * Physics & Signal Processing:
- * - Magnitude threshold: Acceleration vector |a| > 1.2g (~12.0 m/s²) for heel strike
- * - Swing-phase valley requirement: |a| < 0.9g (~8.8 m/s²) to reject tilting
- * - 300ms refractory debounce: Enforces physiological step frequency limit (~200 steps/min)
- * - Rhythmic cadence verification: Rejects phone shaking, tilting, or vehicle vibrations
- * - Dual persistence: Synchronous localStorage + durable asynchronous IndexedDB
- * - Background execution: Dedicated Web Worker heartbeat + Service Worker sync + WakeLock
+ * Provides true persistent hardware step tracking:
+ * 1. Native Mobile Integration (Capacitor / Cordova):
+ *    - Direct hardware step counter/detector chip access
+ *    - Android Foreground Service with ongoing notification
+ *    - Auto-restart on device boot (RECEIVE_BOOT_COMPLETED)
+ *    - Survives app closure and removal from recent apps tray
+ *    - Automatic synchronization into IndexedDB and localStorage on reopen
+ * 
+ * 2. Browser / Desktop Fallback:
+ *    - W3C DeviceMotionEvent with realistic physical stride signal processing
+ *    - Heel-strike impact peak threshold: |a| > 1.2g (~12.0 m/s²)
+ *    - Swing-phase valley requirement: |a| < 0.9g (~8.8 m/s²) to reject tilting
+ *    - 300ms refractory debounce cooldown
+ *    - Rhythmic cadence streak validation
+ *    - Dedicated Web Worker heartbeat + Screen WakeLock keepalive
  */
 
 import { toLocalDateString } from '../utils/date';
 import stepService from './stepService';
+import nativeStepBridge from './nativeStepBridge';
 import { get as idbGet, set as idbSet } from 'idb-keyval';
 
 const SENSOR_STORAGE_KEY_PREFIX = 'lifevault_sensor_steps_';
 const SENSOR_ENABLED_KEY = 'lifevault_sensor_tracking_enabled';
 
-// Physical signal processing thresholds
+// Physical signal processing thresholds (for browser fallback)
 const GRAVITY = 9.80665;
 const STEP_PEAK_THRESHOLD = 12.0;       // > 1.2g heel strike impact peak (m/s²)
 const STEP_VALLEY_THRESHOLD = 8.8;      // < 0.9g swing phase trough (m/s²)
@@ -29,7 +37,7 @@ const RHYTHMIC_STRIDES_REQUIRED = 2;    // Require 2 rhythmic strides to confirm
 
 class StepSensorService {
   constructor() {
-    this.status = 'initializing'; // 'unsupported' | 'disabled' | 'permission_denied' | 'tracking'
+    this.status = 'initializing'; // 'native_tracking' | 'tracking' | 'disabled' | 'permission_denied' | 'unsupported' | 'initializing'
     this.sensorSteps = 0;
     this.today = toLocalDateString();
     this.lastStepTimestamp = 0;
@@ -37,7 +45,11 @@ class StepSensorService {
     this.listeners = new Set();
     this.syncTimeout = null;
 
-    // Stride state machine: 'IDLE' -> 'PEAK_DETECTED' -> 'VALLEY_DETECTED' -> STEP
+    // Native Bridge state
+    this.isNative = false;
+    this.nativeUnsubscribe = null;
+
+    // Stride state machine (browser fallback): 'IDLE' -> 'PEAK_DETECTED' -> 'VALLEY_DETECTED' -> STEP
     this.stridePhase = 'IDLE';
     this.lastPeakTimestamp = 0;
 
@@ -45,7 +57,7 @@ class StepSensorService {
     this.filteredMagnitude = GRAVITY;
     this.prevMagnitude = GRAVITY;
 
-    // Background keepalive primitives
+    // Browser background keepalive primitives
     this.backgroundWorker = null;
     this.wakeLock = null;
 
@@ -54,8 +66,8 @@ class StepSensorService {
   }
 
   /**
-   * Initializes sensor availability, restores persisted state from IndexedDB/localStorage,
-   * and sets up background visibility watchers.
+   * Initializes sensor availability, checks native background service permissions,
+   * restores persisted state from IndexedDB/localStorage, and registers lifecycle watchers.
    */
   async init() {
     this.checkDayRollover();
@@ -67,10 +79,54 @@ class StepSensorService {
       return this.status;
     }
 
-    // Attach visibility change listener to preserve state across minimizes/tab switches
+    // Attach lifecycle change listeners to automatically sync state across minimizes,
+    // recent-apps clears, and app reopens
     document.removeEventListener('visibilitychange', this.boundVisibilityChange);
     document.addEventListener('visibilitychange', this.boundVisibilityChange);
+    window.removeEventListener('focus', this.boundVisibilityChange);
+    window.addEventListener('focus', this.boundVisibilityChange);
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('resume', this.boundVisibilityChange);
+      document.addEventListener('resume', this.boundVisibilityChange);
+    }
 
+    const wasEnabled = localStorage.getItem(SENSOR_ENABLED_KEY) === 'true';
+
+    // -------------------------------------------------------------------------
+    // 1. Native Mobile Platform Check (Capacitor / Cordova)
+    // -------------------------------------------------------------------------
+    if (nativeStepBridge.isNativeEnvironment()) {
+      try {
+        const isHardwareAvailable = await nativeStepBridge.isHardwareStepAvailable();
+        const nativeStatus = await nativeStepBridge.getServiceStatus();
+        this.isNative = true;
+
+        // Synchronize steps from native persistent storage (if higher)
+        if (nativeStatus && typeof nativeStatus.steps === 'number' && nativeStatus.steps > this.sensorSteps) {
+          this.sensorSteps = nativeStatus.steps;
+          await this.savePersistedCount();
+        }
+
+        // If native service is already active or user previously enabled it,
+        // seamlessly resume native tracking without requiring manual button press!
+        if (nativeStatus.isActive || wasEnabled) {
+          await this.startNativeTracking();
+          this.status = 'native_tracking';
+          this.notifyListeners();
+          return this.status;
+        } else if (isHardwareAvailable) {
+          this.status = 'disabled';
+          this.notifyListeners();
+          return this.status;
+        }
+      } catch (err) {
+        console.warn('[StepSensor] Native bridge initialization error, falling back to browser physics:', err);
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // 2. Browser Fallback: DeviceMotionEvent & Physical Stride Signal Processing
+    // -------------------------------------------------------------------------
     if (!('DeviceMotionEvent' in window)) {
       this.status = 'unsupported';
       this.notifyListeners();
@@ -83,13 +139,10 @@ class StepSensorService {
       return this.status;
     }
 
-    const wasEnabled = localStorage.getItem(SENSOR_ENABLED_KEY) === 'true';
-
-    // On iOS 13+, permission must be requested on explicit user gesture
+    // On iOS 13+ Safari, permission must be requested on explicit user gesture
     if (typeof DeviceMotionEvent.requestPermission === 'function') {
       this.status = 'disabled';
     } else {
-      // Android / standard desktop
       if (wasEnabled) {
         this.startTracking();
       } else {
@@ -99,6 +152,46 @@ class StepSensorService {
 
     this.notifyListeners();
     return this.status;
+  }
+
+  /**
+   * Starts native mobile hardware tracking with Android Foreground Service
+   */
+  async startNativeTracking() {
+    this.isNative = true;
+    try {
+      await nativeStepBridge.startBackgroundTracking();
+    } catch (err) {
+      console.warn('[StepSensor] startBackgroundTracking notice:', err?.message);
+    }
+
+    // Subscribe to live step updates from native service
+    if (this.nativeUnsubscribe) {
+      this.nativeUnsubscribe();
+    }
+    this.nativeUnsubscribe = nativeStepBridge.addStepListener((data) => {
+      this.handleNativeStepUpdate(data);
+    });
+
+    this.status = 'native_tracking';
+    localStorage.setItem(SENSOR_ENABLED_KEY, 'true');
+    this.notifyListeners();
+  }
+
+  /**
+   * Handles real-time step update emitted by the native hardware bridge
+   */
+  handleNativeStepUpdate(data) {
+    this.checkDayRollover();
+    if (data && typeof data.steps === 'number') {
+      const incomingSteps = data.steps;
+      if (incomingSteps > this.sensorSteps) {
+        this.sensorSteps = incomingSteps;
+        this.savePersistedCount();
+        this.notifyListeners();
+        this.debounceBackendSync();
+      }
+    }
   }
 
   /**
@@ -169,9 +262,27 @@ class StepSensorService {
   }
 
   /**
-   * Requests device motion permission (required on iOS) and starts tracking
+   * Requests sensor permission and starts tracking.
+   * If on a native device, requests ACTIVITY_RECOGNITION and starts Foreground Service.
    */
   async requestPermissionAndEnable() {
+    // 1. Check Native Bridge first
+    if (this.isNative || nativeStepBridge.isNativeEnvironment()) {
+      try {
+        await this.startNativeTracking();
+        this.status = 'native_tracking';
+        localStorage.setItem(SENSOR_ENABLED_KEY, 'true');
+        this.notifyListeners();
+        return true;
+      } catch (err) {
+        console.warn('[StepSensor] Native enable error:', err);
+        this.status = 'permission_denied';
+        this.notifyListeners();
+        return false;
+      }
+    }
+
+    // 2. Fallback to Browser Motion API
     if (typeof window === 'undefined' || !('DeviceMotionEvent' in window)) {
       this.status = 'unsupported';
       this.notifyListeners();
@@ -205,7 +316,7 @@ class StepSensorService {
   }
 
   /**
-   * Starts listening to physical DeviceMotionEvent and launches background worker
+   * Starts listening to physical DeviceMotionEvent and launches browser background worker
    */
   startTracking() {
     if (typeof window === 'undefined') return;
@@ -223,12 +334,20 @@ class StepSensorService {
   }
 
   /**
-   * Stops listening to sensor events and terminates background worker
+   * Stops listening to sensor events and terminates background services
    */
-  stopTracking() {
-    if (typeof window === 'undefined') return;
+  async stopTracking() {
+    if (this.isNative) {
+      if (this.nativeUnsubscribe) {
+        this.nativeUnsubscribe();
+        this.nativeUnsubscribe = null;
+      }
+      await nativeStepBridge.stopBackgroundTracking();
+    }
 
-    window.removeEventListener('devicemotion', this.boundHandleMotion);
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('devicemotion', this.boundHandleMotion);
+    }
     this.status = 'disabled';
     localStorage.setItem(SENSOR_ENABLED_KEY, 'false');
 
@@ -299,20 +418,37 @@ class StepSensorService {
   }
 
   /**
-   * Handles tab/app visibility changes (persists count on minimize, reconciles on restore)
+   * Handles tab/app visibility changes and app reopen:
+   * Reconciles step count accumulated while closed and persists state.
    */
   async handleVisibilityChange() {
     this.checkDayRollover();
+
+    // If native tracking is active, sync steps accumulated while app was in background or closed
+    if (this.isNative) {
+      try {
+        const nativeData = await nativeStepBridge.getTodaySteps();
+        if (nativeData && typeof nativeData.steps === 'number' && nativeData.steps > this.sensorSteps) {
+          this.sensorSteps = nativeData.steps;
+          this.debounceBackendSync();
+        }
+      } catch (err) {
+        console.warn('[StepSensor] Sync on app resume failed:', err);
+      }
+    }
+
     await this.savePersistedCount();
 
     if (!document.hidden && this.status === 'tracking') {
       // Re-acquire wake lock if released while minimized
       this.requestWakeLock();
     }
+
+    this.notifyListeners();
   }
 
   /**
-   * Real-time DeviceMotionEvent signal processing pipeline.
+   * Real-time DeviceMotionEvent signal processing pipeline (Browser Fallback).
    * Enforces realistic physical constraints:
    * 1. Total acceleration vector |a| = sqrt(x² + y² + z²)
    * 2. Peak threshold > 1.2g (12.0 m/s²) for heel strike
@@ -443,6 +579,8 @@ class StepSensorService {
       status: this.status,
       sensorSteps: this.sensorSteps,
       today: this.today,
+      isNative: this.isNative,
+      trackingType: this.isNative ? 'native_hardware' : 'browser_physics',
     });
     return () => this.listeners.delete(listener);
   }
@@ -452,6 +590,8 @@ class StepSensorService {
       status: this.status,
       sensorSteps: this.sensorSteps,
       today: this.today,
+      isNative: this.isNative,
+      trackingType: this.isNative ? 'native_hardware' : 'browser_physics',
     };
     for (const listener of this.listeners) {
       try {

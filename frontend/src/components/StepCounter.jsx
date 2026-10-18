@@ -11,6 +11,7 @@ export default function StepCounter() {
   const [manualSteps, setManualSteps] = useState(0);
   const [sensorSteps, setSensorSteps] = useState(0);
   const [sensorStatus, setSensorStatus] = useState('initializing');
+  const [isNative, setIsNative] = useState(false);
   const [inputManual, setInputManual] = useState('');
   const [loading, setLoading] = useState(true);
   const [isEditingTarget, setIsEditingTarget] = useState(false);
@@ -27,9 +28,10 @@ export default function StepCounter() {
       unsubscribe = stepSensorService.subscribe((state) => {
         setSensorSteps(state.sensorSteps);
         setSensorStatus(state.status);
+        setIsNative(Boolean(state.isNative));
       });
 
-      // 2. Initialize hardware sensor check
+      // 2. Initialize hardware/native sensor check
       await stepSensorService.init();
 
       // 3. Load persisted steps from backend
@@ -204,15 +206,20 @@ export default function StepCounter() {
         }}
       >
         <div className="p-2 rounded-lg" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
-          <span className="text-[10px] uppercase font-bold tracking-wider block" style={{ color: 'var(--text-muted)' }}>
-            Live Sensor
-          </span>
+          <div className="flex items-center justify-center gap-1 mb-0.5">
+            <span className="text-[10px] uppercase font-bold tracking-wider" style={{ color: 'var(--text-muted)' }}>
+              {isNative ? 'Hardware Chip' : 'Live Sensor'}
+            </span>
+            {sensorStatus === 'native_tracking' && (
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            )}
+          </div>
           <span className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>
             {sensorSteps.toLocaleString()}
           </span>
         </div>
         <div className="p-2 rounded-lg" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
-          <span className="text-[10px] uppercase font-bold tracking-wider block" style={{ color: 'var(--text-muted)' }}>
+          <span className="text-[10px] uppercase font-bold tracking-wider block mb-0.5" style={{ color: 'var(--text-muted)' }}>
             Manual Logged
           </span>
           <span className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>
@@ -223,13 +230,18 @@ export default function StepCounter() {
 
       {/* Hardware Sensor Status Section */}
       <div className="p-3 rounded-lg mb-3 flex flex-col gap-2" style={{ border: '1px solid var(--border-strong)', background: 'var(--surface-muted)', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
-        {sensorStatus === 'tracking' && (
+        {/* Native Hardware Background Tracking Active (Survives app close & recent apps clear) */}
+        {sensorStatus === 'native_tracking' && (
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
               <div>
-                <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 m-0">Live Step Tracking: Active</p>
-                <p className="text-[10px] text-slate-500 m-0">Dynamic vector physics (1.2g threshold) • Background worker & IndexedDB sync active</p>
+                <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 m-0">
+                  Native Hardware Background Tracking Active 🟢
+                </p>
+                <p className="text-[10px] text-slate-500 m-0">
+                  Hardware step counter chip • Foreground Service • Auto-restart on boot • Persists across app closure
+                </p>
               </div>
             </div>
             <button className="btn btn-ghost btn-sm" style={{ fontSize: '11px', padding: '2px 6px' }} onClick={handleStopSensor}>
@@ -238,10 +250,33 @@ export default function StepCounter() {
           </div>
         )}
 
+        {/* Browser Physics Fallback Tracking Active */}
+        {sensorStatus === 'tracking' && (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <div>
+                <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 m-0">
+                  Live Physics Step Tracking: Active
+                </p>
+                <p className="text-[10px] text-slate-500 m-0">
+                  Vector physics (12.0 m/s² heel-strike filter) • Background worker & IndexedDB sync
+                </p>
+              </div>
+            </div>
+            <button className="btn btn-ghost btn-sm" style={{ fontSize: '11px', padding: '2px 6px' }} onClick={handleStopSensor}>
+              Pause
+            </button>
+          </div>
+        )}
+
+        {/* Disabled State */}
         {sensorStatus === 'disabled' && (
           <div className="flex flex-col gap-2">
             <p className="text-xs text-slate-600 m-0">
-              Live hardware motion tracking with realistic stride physics and background persistence.
+              {isNative
+                ? 'Persistent native hardware step tracking with Android Foreground Service. Survives app closure and device restart.'
+                : 'Live hardware motion tracking with realistic stride physics (12.0 m/s² heel-strike filter) and background persistence.'}
             </p>
             <button
               className="btn btn-primary btn-sm full-width"
@@ -249,20 +284,28 @@ export default function StepCounter() {
               onClick={handleEnableSensor}
               disabled={actionLoading}
             >
-              {actionLoading ? 'Connecting Sensor...' : '⚡ Enable Step Tracking'}
+              {actionLoading
+                ? 'Connecting Sensor...'
+                : isNative
+                ? '⚡ Enable Native Step Tracking (Hardware Sensor)'
+                : '⚡ Enable Step Tracking'}
             </button>
           </div>
         )}
 
+        {/* Permission Denied */}
         {sensorStatus === 'permission_denied' && (
           <div className="text-xs text-rose-600 flex flex-col gap-1">
-            <span className="font-bold">⚠️ Motion Sensor Permission Denied</span>
+            <span className="font-bold">⚠️ Step Sensor Permission Denied</span>
             <span className="text-[11px] text-slate-500">
-              Allow Motion & Orientation access in your browser/device site settings to track physical steps.
+              {isNative
+                ? 'Allow Physical Activity permission in your device App Settings to track hardware steps.'
+                : 'Allow Motion & Orientation access in your browser/device site settings to track physical steps.'}
             </span>
           </div>
         )}
 
+        {/* Unsupported */}
         {sensorStatus === 'unsupported' && (
           <div className="text-xs text-slate-500 flex flex-col gap-1">
             <span className="font-semibold text-slate-600">Live Step Tracking unavailable</span>
@@ -275,7 +318,9 @@ export default function StepCounter() {
 
       {/* Background Persistence Indicator */}
       <p className="text-[10px] text-slate-400 text-center mb-3 leading-tight">
-        Background Service Worker & IndexedDB sync enabled. Movement persists across app minimization and page reloads.
+        {sensorStatus === 'native_tracking' || isNative
+          ? 'Native Foreground Service & IndexedDB sync active. Step counts continuously update even when the app is swiped away.'
+          : 'Background Service Worker & IndexedDB sync enabled. Movement persists across app minimization and page reloads.'}
       </p>
 
       {/* Manual Entry Section */}

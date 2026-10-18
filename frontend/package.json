@@ -9,9 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
     "@heroicons/react": "^2.2.0",
     "axios": "^1.7.2",
     "canvas-confetti": "^1.9.4",
+    "cordova-plugin-pedometer": "^0.4.1",
     "dompurify": "^3.4.15",
     "framer-motion": "^13.2.0",
     "idb-keyval": "^6.3.0",
@@ -22,6 +25,7 @@
     "react-router-dom": "^7.18.3"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.3",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.5.5",
     "postcss": "^8.5.28",
