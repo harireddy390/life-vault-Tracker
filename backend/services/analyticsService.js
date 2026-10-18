@@ -43,7 +43,7 @@ const logUserActivity = async (userId, module, actionType, intensityWeight = 1, 
 const calculateLifeScores = async (userId) => {
   const todayKey = getTodayKey();
 
-  // Parallel fetch of domain metrics
+  // Parallel fetch of domain metrics with lean()
   const [
     goals,
     milestones,
@@ -56,16 +56,16 @@ const calculateLifeScores = async (userId) => {
     reflections,
     scheduleBlocks,
   ] = await Promise.all([
-    Goal.find({ user: userId }),
-    GoalMilestone.find({ user: userId }),
-    Habit.find({ user: userId, active: true }),
-    Progress.find({ user: userId }),
-    Document.find({ user: userId }),
-    EmergencyContact.find({ user: userId }),
-    VitalsLog.find({ user: userId }).sort({ logged_at: -1 }).limit(10),
-    Medication.find({ user: userId, active: true }),
-    WeeklyReflection.find({ user: userId }).sort({ created_at: -1 }).limit(4),
-    ScheduleBlock.find({ user: userId }),
+    Goal.find({ user: userId }).lean(),
+    GoalMilestone.find({ user: userId }).lean(),
+    Habit.find({ user: userId, active: true }).lean(),
+    Progress.find({ user: userId }).lean(),
+    Document.find({ user: userId }).lean(),
+    EmergencyContact.find({ user: userId }).lean(),
+    VitalsLog.find({ user: userId }).sort({ logged_at: -1 }).limit(10).lean(),
+    Medication.find({ user: userId, active: true }).lean(),
+    WeeklyReflection.find({ user: userId }).sort({ created_at: -1 }).limit(4).lean(),
+    ScheduleBlock.find({ user: userId }).lean(),
   ]);
 
   // A. GOALS SCORE (0–100%) - Genuine calculation from actual goals & milestones
@@ -284,17 +284,17 @@ const generate365Heatmap = async (userId, year = 2026) => {
   const startDateStr = `${yr}-01-01`;
   const endDateStr = `${yr}-12-31`;
 
-  // Parallel fetch activity logs, habit progress, and schedule block completions
+  // Parallel fetch activity logs, habit progress, and schedule block completions with lean()
   const [activityLogs, habitProgress, scheduleBlocks] = await Promise.all([
     ActivityLog.find({
       user: userId,
       date_key: { $gte: startDateStr, $lte: endDateStr },
-    }),
+    }).lean(),
     Progress.find({
       user: userId,
       date: { $gte: startDateStr, $lte: endDateStr },
       completed: true,
-    }),
+    }).lean(),
     ScheduleBlock.find({
       user: userId,
       completedDates: { $exists: true, $not: { $size: 0 } },

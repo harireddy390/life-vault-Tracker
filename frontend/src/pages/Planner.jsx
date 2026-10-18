@@ -21,6 +21,7 @@ import DomainDrilldownModal from '../components/analytics/DomainDrilldownModal';
 import ExportPreviewModal from '../components/analytics/ExportPreviewModal';
 
 import { BarChart3, CheckSquare, Sparkles, RefreshCw } from 'lucide-react';
+import swrCache from '../utils/swrCache';
 import './Planner.css';
 
 export default function Planner() {
@@ -30,25 +31,29 @@ export default function Planner() {
   // Tab State: 'analytics' (default) or 'habits'
   const [activeTab, setActiveTab] = useState('analytics');
 
-  // Analytics Dashboard State
-  const [analyticsData, setAnalyticsData] = useState(null);
-  const [heatmapData, setHeatmapData] = useState([]);
-  const [reflections, setReflections] = useState([]);
-  const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  // Analytics Dashboard State (Instant SWR Local-First Cache)
+  const cachedAnalytics = swrCache.get('progress:analytics');
+  const [analyticsData, setAnalyticsData] = useState(() => cachedAnalytics || null);
+  const [heatmapData, setHeatmapData] = useState(() => swrCache.get('progress:heatmap') || []);
+  const [reflections, setReflections] = useState(() => swrCache.get('progress:reflections') || []);
+  const [analyticsLoading, setAnalyticsLoading] = useState(() => !cachedAnalytics);
 
   // Analytics Modals State
   const [showReflectionModal, setShowReflectionModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [drilldownDomain, setDrilldownDomain] = useState(null);
 
-  // Habit Tracking State (preserved)
+  // Habit Tracking State (Instant SWR Local-First Cache)
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1); // 1-12
   const [selectedDate, setSelectedDate] = useState(today);
-  const [monthDays, setMonthDays] = useState([]);
-  const [dayData, setDayData] = useState(null);
-  const [dayLoading, setDayLoading] = useState(true);
-  const [stats, setStats] = useState(null);
+  const cachedDay = swrCache.get(`progress:day:${today}`);
+  const [monthDays, setMonthDays] = useState(
+    () => swrCache.get(`progress:month:${now.getFullYear()}:${now.getMonth() + 1}`) || []
+  );
+  const [dayData, setDayData] = useState(() => cachedDay || null);
+  const [dayLoading, setDayLoading] = useState(() => !cachedDay);
+  const [stats, setStats] = useState(() => swrCache.get('progress:stats') || null);
   const [showHabitModal, setShowHabitModal] = useState(false);
   const [editingHabit, setEditingHabit] = useState(null);
   const [deletingHabit, setDeletingHabit] = useState(null);
@@ -62,9 +67,11 @@ export default function Planner() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  // Load Analytics Data
+  // Load Analytics Data (SWR Silent Background Revalidation)
   const loadAnalytics = useCallback(async () => {
-    setAnalyticsLoading(true);
+    if (!analyticsData) {
+      setAnalyticsLoading(true);
+    }
     try {
       const [dashRes, heatRes, refRes] = await Promise.all([
         progressAnalyticsService.getDashboardAnalytics(),
@@ -73,36 +80,48 @@ export default function Planner() {
       ]);
       const dashData = dashRes?.scores ? dashRes : (dashRes?.data || dashRes || {});
       setAnalyticsData(dashData);
+      swrCache.set('progress:analytics', dashData);
 
       const heatList = Array.isArray(heatRes?.days) ? heatRes.days : Array.isArray(heatRes) ? heatRes : (heatRes?.data || []);
       setHeatmapData(heatList);
+      swrCache.set('progress:heatmap', heatList);
 
       const refList = Array.isArray(refRes?.reflections) ? refRes.reflections : Array.isArray(refRes) ? refRes : (refRes?.data || []);
       setReflections(refList);
+      swrCache.set('progress:reflections', refList);
     } catch (err) {
-      showToast('Could not refresh life analytics.', 'error');
+      if (!analyticsData) {
+        showToast('Could not refresh life analytics.', 'error');
+      }
     } finally {
       setAnalyticsLoading(false);
     }
-  }, []);
+  }, [analyticsData]);
 
   // Load Habit Planner Data
   const loadMonth = useCallback(async () => {
     try {
       const res = await progressService.getMonthProgress(year, month);
       setMonthDays(res.days);
+      swrCache.set(`progress:month:${year}:${month}`, res.days);
     } catch {
       showToast('Could not load calendar.', 'error');
     }
   }, [year, month]);
 
   const loadDay = useCallback(async (date) => {
-    setDayLoading(true);
+    const cached = swrCache.get(`progress:day:${date}`);
+    if (!cached) {
+      setDayLoading(true);
+    }
     try {
       const res = await progressService.getDateProgress(date);
       setDayData(res);
+      swrCache.set(`progress:day:${date}`, res);
     } catch {
-      showToast('Could not load that day.', 'error');
+      if (!cached) {
+        showToast('Could not load that day.', 'error');
+      }
     } finally {
       setDayLoading(false);
     }
@@ -174,28 +193,47 @@ export default function Planner() {
 
   const handleToggle = async (task) => {
     const nextCompleted = !task.completed;
+    const prevDay = dayData;
+    let nextDayData = null;
+
+    // 1. Mutate local state immediately (< 1ms)
     setDayData((prev) => {
       if (!prev || !prev.tasks) return prev;
       const tasks = prev.tasks.map((t) => (t._id === task._id ? { ...t, completed: nextCompleted } : t));
       const completedCount = tasks.filter((t) => t.completed).length;
-      return {
+      nextDayData = {
         ...prev,
         tasks,
-        completedCount,
-        percentage: tasks.length ? Math.round((completedCount / tasks.length) * 100) : 0,
+        summary: {
+          ...(prev.summary || {}),
+          completedCount,
+          percentage: tasks.length ? Math.round((completedCount / tasks.length) * 100) : 0,
+        },
       };
+      return nextDayData;
     });
+
+    if (nextDayData) {
+      swrCache.set(`progress:day:${selectedDate}`, nextDayData);
+    }
+
+    // 2. Dispatch sync event on the same frame (< 1ms)
+    notifyProgressSync();
+
+    // 3. Background API sync
     try {
       await progressService.setProgress(task._id, selectedDate, nextCompleted);
       loadMonth();
       loadStats();
       loadYear();
-      // Silently re-sync analytics data in background
       loadAnalytics();
-      notifyProgressSync();
     } catch {
       showToast('Could not save progress — reloading.', 'error');
-      loadDay(selectedDate);
+      if (prevDay) {
+        setDayData(prevDay);
+        swrCache.set(`progress:day:${selectedDate}`, prevDay);
+        notifyProgressSync();
+      }
     }
   };
 

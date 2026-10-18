@@ -106,6 +106,8 @@ const scheduleBlockSchema = new mongoose.Schema(
 );
 
 scheduleBlockSchema.index({ user: 1, isRecurring: 1 });
-scheduleBlockSchema.index({ user: 1, date: 1 });
+scheduleBlockSchema.index({ user: 1, isRecurring: 1, daysOfWeek: 1 });
+scheduleBlockSchema.index({ user: 1, date: 1, startTime: 1 });
+scheduleBlockSchema.index({ user: 1, createdAt: -1 });
 
 module.exports = mongoose.model('ScheduleBlock', scheduleBlockSchema);

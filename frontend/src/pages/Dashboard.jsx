@@ -13,6 +13,7 @@ import Toast from '../components/Toast';
 import StepCounter from '../components/StepCounter';
 import { toLocalDateString } from '../utils/date';
 import { getDashboardGreeting } from '../utils/greetingUtils';
+import swrCache from '../utils/swrCache';
 
 import { useDashboardStore } from '../hooks/useDashboardStore';
 import MomentumRing from '../components/dashboard/MomentumRing';
@@ -37,16 +38,17 @@ export default function Dashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  // ── Remote data ──────────────────────────────────────────────────────────
-  const [tasks, setTasks]           = useState([]);
-  const [goals, setGoals]           = useState([]);
-  const [docs, setDocs]             = useState([]);
-  const [expenses, setExpenses]     = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [toast, setToast]           = useState(null);
-  const [timerSessions, setTimerSessions] = useState([]);
-  const [habitDay, setHabitDay]     = useState(null);
-  const [habitStats, setHabitStats] = useState(null);
+  // ── Remote data (Instant SWR Local-First Cache) ──────────────────────────
+  const cachedTasks = swrCache.get('dashboard:tasks');
+  const [tasks, setTasks]                 = useState(() => cachedTasks || []);
+  const [goals, setGoals]                 = useState(() => swrCache.get('dashboard:goals') || []);
+  const [docs, setDocs]                   = useState(() => swrCache.get('dashboard:docs') || []);
+  const [expenses, setExpenses]           = useState(() => swrCache.get('dashboard:expenses') || []);
+  const [loading, setLoading]             = useState(() => !cachedTasks);
+  const [toast, setToast]                 = useState(null);
+  const [timerSessions, setTimerSessions] = useState(() => swrCache.get('dashboard:timerSessions') || []);
+  const [habitDay, setHabitDay]           = useState(() => swrCache.get('dashboard:habitDay') || null);
+  const [habitStats, setHabitStats]       = useState(() => swrCache.get('dashboard:habitStats') || null);
 
   // ── Dashboard store (local-persisted) ────────────────────────────────────
   const {
@@ -77,7 +79,7 @@ export default function Dashboard() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // ── Load remote data ──────────────────────────────────────────────────────
+  // ── Load remote data (Silent SWR background revalidation) ─────────────────
   useEffect(() => { loadData(); }, []);
 
   useEffect(() => {
@@ -89,7 +91,9 @@ export default function Dashboard() {
   }, []);
 
   const loadData = async () => {
-    setLoading(true);
+    if (!tasks || tasks.length === 0) {
+      setLoading(true);
+    }
     try {
       const todayLocal = toLocalDateString();
       const [t, g, d, e, ts, hd, hs] = await Promise.all([
@@ -103,17 +107,26 @@ export default function Dashboard() {
       ]);
       setTasks(t); setGoals(g); setDocs(d); setExpenses(e); setTimerSessions(ts);
       setHabitDay(hd); setHabitStats(hs);
+      swrCache.set('dashboard:tasks', t);
+      swrCache.set('dashboard:goals', g);
+      swrCache.set('dashboard:docs', d);
+      swrCache.set('dashboard:expenses', e);
+      swrCache.set('dashboard:timerSessions', ts);
+      swrCache.set('dashboard:habitDay', hd);
+      swrCache.set('dashboard:habitStats', hs);
 
       // Sync today's step count into dashboard store
       try {
         const steps = await stepService.getSteps();
         const todayStep = steps.find(s => s.date === todayLocal);
         if (todayStep) {
-          // just read it — StepCounter manages its own persistence
+          // read it
         }
       } catch { /* non-critical */ }
     } catch {
-      showToast('Could not load your data. Is the backend running?', 'error');
+      if (!tasks || tasks.length === 0) {
+        showToast('Could not load your data. Is the backend running?', 'error');
+      }
     } finally {
       setLoading(false);
     }

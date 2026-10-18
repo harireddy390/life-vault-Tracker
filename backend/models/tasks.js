@@ -18,7 +18,9 @@ const taskSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Compound indexes for high-performance user task queries
-taskSchema.index({ user: 1, active: 1 });
-taskSchema.index({ user: 1, completed: 1 });
+taskSchema.index({ user: 1, active: 1, createdAt: -1 });
+taskSchema.index({ user: 1, completed: 1, completedAt: -1 });
+taskSchema.index({ user: 1, dueDate: 1 });
+taskSchema.index({ user: 1, priority: 1 });
 
 module.exports = mongoose.model('Task', taskSchema);

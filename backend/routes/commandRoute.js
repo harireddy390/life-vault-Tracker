@@ -38,12 +38,32 @@ router.get('/today', protect, async (req, res) => {
       ],
     };
 
-    const rawBlocks = await ScheduleBlock.find(scheduleQuery)
-      .populate('linkedTask', 'text priority completed')
-      .populate('linkedGoal', 'title category progress_percent')
-      .populate('linkedLearning', 'title category progress_percent')
-      .populate('linkedWorkout', 'workoutType durationMinutes completed')
-      .lean();
+    // 1. Parallel fetch of all independent data sources with lean()
+    const [
+      rawBlocks,
+      allTasks,
+      habits,
+      todayProgress,
+      todayWorkout,
+      activeLearningTopic,
+      activeGoals,
+    ] = await Promise.all([
+      ScheduleBlock.find(scheduleQuery)
+        .populate('linkedTask', 'text priority completed')
+        .populate('linkedGoal', 'title category progress_percent')
+        .populate('linkedLearning', 'title category progress_percent')
+        .populate('linkedWorkout', 'workoutType durationMinutes completed')
+        .lean(),
+      Task.find({ user: userId, active: true }).sort({ important: -1, createdAt: -1 }).lean(),
+      Habit.find({ user: userId, active: true }).sort({ important: -1, createdAt: -1 }).lean(),
+      Progress.find({ user: userId, date: dateStr }).lean(),
+      WorkoutLog.findOne({ user: userId, date: dateStr }).lean(),
+      LearningTopic.findOne({ user: userId }).sort({ updatedAt: -1 }).lean(),
+      Goal.find({ user: userId, status: { $in: ['active', 'behind'] } })
+        .sort({ priority: -1, target_date: 1 })
+        .limit(4)
+        .lean(),
+    ]);
 
     // Map and annotate blocks with runtime completion, duration, and status
     const blocks = rawBlocks.map((b) => {
@@ -90,9 +110,7 @@ router.get('/today', protect, async (req, res) => {
     const completedBlocks = blocks.filter((b) => b.isCompleted).length;
     const scheduleScore = totalBlocks > 0 ? Math.round((completedBlocks / totalBlocks) * 100) : 100;
 
-    // 2. Fetch Tasks (Partitioned into Must Do, Should Do, Quick Wins, Overdue)
-    const allTasks = await Task.find({ user: userId, active: true }).sort({ important: -1, createdAt: -1 }).lean();
-
+    // 2. Process Tasks (Partitioned into Must Do, Should Do, Quick Wins, Overdue)
     const mustDo = [];
     const shouldDo = [];
     const quickWins = [];
@@ -122,9 +140,7 @@ router.get('/today', protect, async (req, res) => {
     const totalTasksEvaluated = activeTasksCount + completedTasksToday;
     const taskScore = totalTasksEvaluated > 0 ? Math.round((completedTasksToday / totalTasksEvaluated) * 100) : 100;
 
-    // 3. Fetch Habits and Today's Progress Records
-    const habits = await Habit.find({ user: userId, active: true }).sort({ important: -1, createdAt: -1 }).lean();
-    const todayProgress = await Progress.find({ user: userId, date: dateStr }).lean();
+    // 3. Process Habits and Today's Progress Records
     const progressMap = new Map();
     todayProgress.forEach((p) => progressMap.set(p.task.toString(), p));
 
@@ -145,14 +161,12 @@ router.get('/today', protect, async (req, res) => {
     const completedHabits = todayHabits.filter((h) => h.isCompleted).length;
     const habitScore = totalHabits > 0 ? Math.round((completedHabits / totalHabits) * 100) : 100;
 
-    // 4. Fetch Workout Log for Today
-    const todayWorkout = await WorkoutLog.findOne({ user: userId, date: dateStr }).lean();
+    // 4. Fitness & Workout Score
     const isGymScheduled = blocks.some((b) => b.category === 'gym');
     const isRestDay = !isGymScheduled || dayOfWeek === 0 || dayOfWeek === 6; // Sunday/Weekend rest
     const workoutScore = todayWorkout ? 100 : isRestDay ? 100 : 0;
 
-    // 5. Fetch Study & Learning Roadmap Snapshot
-    const activeLearningTopic = await LearningTopic.findOne({ user: userId }).sort({ updatedAt: -1 }).lean();
+    // 5. Study & Learning Roadmap Snapshot
     let currentStudyStep = null;
     if (activeLearningTopic && Array.isArray(activeLearningTopic.steps)) {
       currentStudyStep = activeLearningTopic.steps.find((s) => !s.isCompleted) || null;
@@ -160,12 +174,6 @@ router.get('/today', protect, async (req, res) => {
     const isStudyScheduled = blocks.some((b) => b.category === 'study');
     const isStudyCompleted = blocks.some((b) => b.category === 'study' && b.isCompleted);
     const studyScore = !isStudyScheduled ? 100 : isStudyCompleted ? 100 : 0;
-
-    // 6. Fetch Active Goals Requiring Attention
-    const activeGoals = await Goal.find({ user: userId, status: { $in: ['active', 'behind'] } })
-      .sort({ priority: -1, target_date: 1 })
-      .limit(4)
-      .lean();
 
     // 7. Deterministic Explainable Daily Execution Score
     // Formula: Schedule (30%) + Tasks (25%) + Habits (20%) + Fitness (15%) + Study (10%)

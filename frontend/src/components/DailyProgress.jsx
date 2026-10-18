@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useMemo, memo } from 'react';
 import { formatDisplayDate } from '../utils/date';
 import { Edit2, Trash2, Plus } from 'lucide-react';
 import './DailyProgress.css';
 
-export default function DailyProgress({
+function DailyProgress({
   date,
   data,
   loading,
@@ -15,7 +15,7 @@ export default function DailyProgress({
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [noteInputs, setNoteInputs] = useState({});
 
-  if (loading) {
+  if (loading && !data) {
     return (
       <div className="flex flex-col items-center justify-center py-10 text-gray-500">
         <span className="animate-spin text-3xl mb-3">⏳</span>
@@ -28,11 +28,11 @@ export default function DailyProgress({
 
   const tasks = data.tasks || [];
   const summary = data.summary || { totalScheduled: 0, completedCount: 0, percentage: 0 };
-  const categories = Array.from(new Set(tasks.map((t) => t.category).filter(Boolean)));
-  const filteredTasks = categoryFilter === 'All' ? tasks : tasks.filter((t) => t.category === categoryFilter);
+  const categories = useMemo(() => Array.from(new Set(tasks.map((t) => t.category).filter(Boolean))), [tasks]);
+  const filteredTasks = useMemo(() => categoryFilter === 'All' ? tasks : tasks.filter((t) => t.category === categoryFilter), [categoryFilter, tasks]);
 
   const totalTasks = filteredTasks.length;
-  const completedTasks = filteredTasks.filter((t) => t.completed).length;
+  const completedTasks = useMemo(() => filteredTasks.filter((t) => t.completed).length, [filteredTasks]);
   const dynamicPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   return (
@@ -236,3 +236,5 @@ export default function DailyProgress({
     </div>
   );
 }
+
+export default memo(DailyProgress);

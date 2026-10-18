@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, memo } from 'react';
 import { Target, Heart, Shield, CheckCircle2, Brain, Info, Sparkles } from 'lucide-react';
 
-export default function HolisticBalanceWheel({ radarData, onSelectDomain }) {
+function HolisticBalanceWheel({ radarData, onSelectDomain }) {
   const [hoveredDomain, setHoveredDomain] = useState(null);
   const [showInfoTooltip, setShowInfoTooltip] = useState(false);
   const [clickedDomain, setClickedDomain] = useState(null);
@@ -438,3 +438,5 @@ export default function HolisticBalanceWheel({ radarData, onSelectDomain }) {
     </div>
   );
 }
+
+export default memo(HolisticBalanceWheel);

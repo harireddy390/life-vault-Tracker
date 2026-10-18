@@ -36,10 +36,12 @@ router.get('/date/:date', protect, async (req, res) => {
       return res.status(400).json({ message: 'Invalid date format. Expected YYYY-MM-DD' });
     }
 
-    const habits = await Habit.find({ user: req.user.id, active: true }).sort({ important: -1, createdAt: -1 });
+    const [habits, progressRecords] = await Promise.all([
+      Habit.find({ user: req.user.id, active: true }).sort({ important: -1, createdAt: -1 }).lean(),
+      Progress.find({ user: req.user.id, date }).lean(),
+    ]);
     const scheduledHabits = habits.filter((h) => isTaskScheduledOnDate(h, date));
 
-    const progressRecords = await Progress.find({ user: req.user.id, date });
     const progressMap = new Map();
     progressRecords.forEach((pr) => { progressMap.set(pr.task.toString(), pr); });
 
@@ -105,13 +107,14 @@ router.get('/month/:year/:month', protect, async (req, res) => {
     const prefix = `${year}-${monthStr}`;
     const daysInMonth = new Date(year, month, 0).getDate();
 
-    const [habits, scheduleBlocks, progressRecords] = await Promise.all([
-      Habit.find({ user: req.user.id, active: true }),
-      ScheduleBlock.find({ user: req.user.id }),
+    const [habits, scheduleBlocks, progressRecords, allUserProgress] = await Promise.all([
+      Habit.find({ user: req.user.id, active: true }).lean(),
+      ScheduleBlock.find({ user: req.user.id }).lean(),
       Progress.find({
         user: req.user.id,
         date: { $regex: `^${prefix}` },
-      }),
+      }).lean(),
+      Progress.find({ user: req.user.id }).lean(),
     ]);
 
     const progressByDate = {};
@@ -172,7 +175,6 @@ router.get('/month/:year/:month', protect, async (req, res) => {
       ? Math.round((totalMonthCompleted / totalMonthScheduled) * 100)
       : 0;
 
-    const allUserProgress = await Progress.find({ user: req.user.id });
     const streaks = calculateStreaks(allUserProgress, habits);
 
     res.status(200).json({
@@ -198,8 +200,8 @@ router.get('/month/:year/:month', protect, async (req, res) => {
 router.get('/stats', protect, async (req, res) => {
   try {
     const [habits, progressRecords] = await Promise.all([
-      Habit.find({ user: req.user.id }),
-      Progress.find({ user: req.user.id }),
+      Habit.find({ user: req.user.id }).lean(),
+      Progress.find({ user: req.user.id }).lean(),
     ]);
 
     const streakData = calculateStreaks(progressRecords, habits);
@@ -225,12 +227,13 @@ router.get('/matrix', protect, async (req, res) => {
       cur = addDays(cur, 1);
     }
 
-    const habits = await Habit.find({ user: req.user.id, active: true }).sort({ important: -1, createdAt: -1 });
-
-    const progressRecords = await Progress.find({
-      user: req.user.id,
-      date: { $gte: startDate, $lte: endDate },
-    });
+    const [habits, progressRecords] = await Promise.all([
+      Habit.find({ user: req.user.id, active: true }).sort({ important: -1, createdAt: -1 }).lean(),
+      Progress.find({
+        user: req.user.id,
+        date: { $gte: startDate, $lte: endDate },
+      }).lean(),
+    ]);
 
     const progressLookup = {};
     progressRecords.forEach((pr) => {
@@ -433,12 +436,12 @@ router.get('/year/:year', protect, async (req, res) => {
     const lastDate = `${year}-12-31`;
 
     const [allHabits, scheduleBlocks, records] = await Promise.all([
-      Habit.find({ user: req.user.id }),
-      ScheduleBlock.find({ user: req.user.id }),
+      Habit.find({ user: req.user.id }).lean(),
+      ScheduleBlock.find({ user: req.user.id }).lean(),
       Progress.find({
         user: req.user.id,
         date: { $gte: firstDate, $lte: lastDate },
-      }),
+      }).lean(),
     ]);
     const recordsByDate = new Map();
     records.forEach((r) => {
@@ -547,7 +550,8 @@ router.get('/reflections', protect, async (req, res) => {
       WeeklyReflection.find(query)
         .sort({ created_at: -1 })
         .skip((page - 1) * limit)
-        .limit(limit),
+        .limit(limit)
+        .lean(),
       WeeklyReflection.countDocuments(query),
     ]);
 

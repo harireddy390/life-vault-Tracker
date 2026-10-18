@@ -28,6 +28,7 @@ import notificationService from '../services/notificationService';
 import GlobalSearch from '../components/GlobalSearch';
 import GlobalFloatingTimer from '../components/GlobalFloatingTimer';
 import Logo from '../components/ui/Logo';
+import { prefetchRoute, preloadCriticalRoutesOnIdle } from '../utils/prefetch';
 import './AppLayout.css';
 
 // Primary routes displayed on desktop top navbar
@@ -98,6 +99,11 @@ export default function AppLayout({ children }) {
 
   const isAnyMoreItemActive = MORE_NAV_ITEMS.some((item) => isRouteActive(item.to));
   const activeMoreItem = MORE_NAV_ITEMS.find((item) => isRouteActive(item.to));
+
+  // Eager predictive prefetching of critical routes on browser idle
+  useEffect(() => {
+    preloadCriticalRoutesOnIdle();
+  }, []);
 
   // Auto-dismiss menus on route changes
   useEffect(() => {
@@ -212,6 +218,8 @@ export default function AppLayout({ children }) {
                 <NavLink
                   key={item.to}
                   to={item.to}
+                  onMouseEnter={() => prefetchRoute(item.to)}
+                  onTouchStart={() => prefetchRoute(item.to)}
                   className={`inline-flex items-center gap-2 px-3 py-1.5 xl:px-3.5 xl:py-2 text-sm rounded-lg transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/30 ${
                     active
                       ? 'bg-slate-100 text-slate-900 font-semibold'
@@ -673,6 +681,8 @@ export default function AppLayout({ children }) {
         {/* 1. Home / Dashboard */}
         <NavLink
           to="/dashboard"
+          onMouseEnter={() => prefetchRoute('/dashboard')}
+          onTouchStart={() => prefetchRoute('/dashboard')}
           className={() => {
             const active = isRouteActive('/dashboard');
             return `flex flex-col items-center justify-center w-14 h-full transition-colors ${
@@ -690,6 +700,8 @@ export default function AppLayout({ children }) {
         {/* 2. Goals */}
         <NavLink
           to="/goals"
+          onMouseEnter={() => prefetchRoute('/goals')}
+          onTouchStart={() => prefetchRoute('/goals')}
           className={() => {
             const active = isRouteActive('/goals');
             return `flex flex-col items-center justify-center w-14 h-full transition-colors ${
@@ -709,6 +721,8 @@ export default function AppLayout({ children }) {
           <button
             type="button"
             onClick={() => setIsQuickActionOpen((prev) => !prev)}
+            onMouseEnter={() => prefetchRoute('/command')}
+            onTouchStart={() => prefetchRoute('/command')}
             className="relative -top-5 w-12 h-12 rounded-full bg-gradient-to-tr from-violet-600 to-purple-600 text-white flex items-center justify-center shadow-lg shadow-purple-500/30 active:scale-95 transition-transform border-4 border-white hover:brightness-110"
             aria-label="Quick Action and Command Center"
           >
@@ -719,6 +733,8 @@ export default function AppLayout({ children }) {
         {/* 4. Health */}
         <NavLink
           to="/health"
+          onMouseEnter={() => prefetchRoute('/health')}
+          onTouchStart={() => prefetchRoute('/health')}
           className={() => {
             const active = isRouteActive('/health');
             return `flex flex-col items-center justify-center w-14 h-full transition-colors ${
@@ -736,6 +752,8 @@ export default function AppLayout({ children }) {
         {/* 5. Profile / Analytics */}
         <NavLink
           to="/progress"
+          onMouseEnter={() => prefetchRoute('/progress')}
+          onTouchStart={() => prefetchRoute('/progress')}
           className={() => {
             const active = isRouteActive('/progress');
             return `flex flex-col items-center justify-center w-14 h-full transition-colors ${

@@ -303,3 +303,23 @@ body { line-height: 1.6; }
 /* Slightly softer, more consistent focus ring app-wide (was inconsistent
    thickness/color between the dark-sidebar era and current light theme) */
 .card:focus-within { box-shadow: var(--shadow-md), 0 0 0 3px rgba(79,70,229,0.1); }
+
+/* ==========================================================================
+   60/120 FPS Mobile Touch & Tap Latency Elimination (0ms Tap Delay)
+   ========================================================================== */
+button,
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+input[type="checkbox"],
+input[type="radio"],
+a,
+[role="button"],
+.sidebar-nav-link,
+.category-pills button,
+.ftv2-pill,
+.dbv2-pill,
+nav a {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}

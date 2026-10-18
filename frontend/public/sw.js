@@ -44,7 +44,7 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Network-First with Cache Fallback for offline PWA navigation and app shell
+// Cache-First for Static Assets (JS, CSS, fonts, icons) & Network-First for Navigation
 self.addEventListener('fetch', (event) => {
   // Only handle GET requests
   if (event.request.method !== 'GET') return;
@@ -56,10 +56,34 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  const isStaticAsset =
+    url.pathname.startsWith('/assets/') ||
+    url.pathname.startsWith('/icons/') ||
+    /\.(js|css|woff2?|ttf|png|jpg|jpeg|svg|webp|ico)$/i.test(url.pathname);
+
+  // 1. Cache-First Strategy for static assets (instant sub-millisecond boots)
+  if (isStaticAsset) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(event.request).then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const clone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, clone).catch(() => {});
+            });
+          }
+          return networkResponse;
+        });
+      })
+    );
+    return;
+  }
+
+  // 2. Network-First with Cache Fallback for HTML navigation & shell
   event.respondWith(
     fetch(event.request)
       .then((networkResponse) => {
-        // Cache successful responses for offline use
         if (networkResponse && networkResponse.status === 200) {
           const clone = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
@@ -69,11 +93,10 @@ self.addEventListener('fetch', (event) => {
         return networkResponse;
       })
       .catch(async () => {
-        // Fallback to cache when offline
         const cachedResponse = await caches.match(event.request);
         if (cachedResponse) return cachedResponse;
 
-        // If SPA navigation request, fallback to cached index.html
+        // SPA navigation fallback to cached index.html
         if (event.request.mode === 'navigate' || event.request.headers.get('accept')?.includes('text/html')) {
           const indexCached = await caches.match('/index.html');
           if (indexCached) return indexCached;

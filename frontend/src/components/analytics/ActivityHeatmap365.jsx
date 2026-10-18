@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, memo } from 'react';
 import { Calendar, Flame } from 'lucide-react';
 
-export default function ActivityHeatmap365({ heatmapData = [] }) {
+function ActivityHeatmap365({ heatmapData = [] }) {
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [hoveredCell, setHoveredCell] = useState(null);
 
@@ -274,3 +274,5 @@ export default function ActivityHeatmap365({ heatmapData = [] }) {
     </div>
   );
 }
+
+export default memo(ActivityHeatmap365);

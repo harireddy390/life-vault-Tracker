@@ -44,21 +44,23 @@ import QuickTaskModal from '../components/command/QuickTaskModal';
 import WeeklyReviewModal from '../components/command/WeeklyReviewModal';
 import DailyScoreModal from '../components/command/DailyScoreModal';
 import RoutineNotificationCard from '../components/command/RoutineNotificationCard';
+import swrCache from '../utils/swrCache';
 import './CommandCenter.css';
 
 export default function CommandCenter() {
   const user = authService.getCurrentUser();
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [scheduleBlocks, setScheduleBlocks] = useState([]);
+  const cachedInitial = swrCache.get('command:today');
+  const [data, setData] = useState(() => cachedInitial || null);
+  const [loading, setLoading] = useState(() => !cachedInitial);
+  const [selectedDate, setSelectedDate] = useState(() => cachedInitial?.istContext?.dateStr || null);
+  const [scheduleBlocks, setScheduleBlocks] = useState(() => cachedInitial?.schedule?.blocks || []);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [showPastRoutines, setShowPastRoutines] = useState(false);
   const [taskFilter, setTaskFilter] = useState('all'); // 'all', 'mustDo', 'shouldDo', 'quickWins', 'overdue'
 
   // Weekly Operating System Mode
   const [scheduleViewMode, setScheduleViewMode] = useState('daily'); // 'daily' | 'weekly'
-  const [weeklyData, setWeeklyData] = useState(null);
+  const [weeklyData, setWeeklyData] = useState(() => swrCache.get('command:weekly') || null);
   const [weeklyLoading, setWeeklyLoading] = useState(false);
 
   // Modals
@@ -78,21 +80,28 @@ export default function CommandCenter() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  // ── Load Today's Command Center Data ───────────────────────────────────────
+  // ── Load Today's Command Center Data (SWR Silent Background Revalidation) ───
   const loadTodayData = useCallback(async () => {
     try {
-      setLoading(true);
+      if (!data) {
+        setLoading(true);
+      }
       const res = await commandService.getTodayData();
       setData(res);
-      setSelectedDate(res.istContext.dateStr);
-      setScheduleBlocks(res.schedule.blocks || []);
+      swrCache.set('command:today', res);
+      if (!selectedDate || selectedDate === res.istContext?.dateStr) {
+        setSelectedDate(res.istContext.dateStr);
+        setScheduleBlocks(res.schedule.blocks || []);
+      }
     } catch (err) {
       console.error('Failed to load Command Center:', err);
-      showToast('Could not load Command Center data.', 'error');
+      if (!data) {
+        showToast('Could not load Command Center data.', 'error');
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [data, selectedDate]);
 
   useEffect(() => {
     loadTodayData();
@@ -238,28 +247,59 @@ export default function CommandCenter() {
     window.dispatchEvent(new CustomEvent('lifevault:progress-sync', { detail: { timestamp: Date.now() } }));
   };
 
-  // ── Schedule Block Actions (Optimistic) ────────────────────────────────────
+  // ── Schedule Block Actions (100% Optimistic Sub-Millisecond Reactions) ──
   const handleToggleBlock = async (blockId) => {
-    // Optimistic toggle
-    setScheduleBlocks((prev) =>
-      prev.map((b) => (b._id === blockId ? { ...b, isCompleted: !b.isCompleted } : b))
-    );
+    const prevBlocks = scheduleBlocks;
+    const prevData = data;
+    const targetBlock = scheduleBlocks.find((b) => b._id === blockId);
+    const willBeCompleted = targetBlock ? !targetBlock.isCompleted : true;
 
+    if (willBeCompleted) {
+      confetti({ particleCount: 35, spread: 50, origin: { y: 0.8 } });
+    }
+
+    // 1. Immediate local state mutation (< 1ms)
+    const nextBlocks = scheduleBlocks.map((b) =>
+      b._id === blockId ? { ...b, isCompleted: willBeCompleted } : b
+    );
+    setScheduleBlocks(nextBlocks);
+
+    if (data && data.schedule) {
+      const totalB = nextBlocks.length;
+      const compB = nextBlocks.filter((b) => b.isCompleted).length;
+      const nextSchedScore = totalB > 0 ? Math.round((compB / totalB) * 100) : 100;
+      const updatedData = {
+        ...data,
+        schedule: {
+          ...data.schedule,
+          blocks: nextBlocks,
+        },
+        summary: {
+          ...data.summary,
+          scheduleScore: nextSchedScore,
+        },
+      };
+      setData(updatedData);
+      swrCache.set('command:today', updatedData);
+    }
+
+    // 2. Dispatch sync event on the very same frame before network request leaves
+    notifyGlobalProgressSync();
+
+    // 3. Asynchronous background network sync
     try {
-      const res = await commandService.toggleScheduleBlock(blockId, selectedDate);
-      if (res.isCompleted) {
-        confetti({ particleCount: 35, spread: 50, origin: { y: 0.8 } });
-      }
-      // Refresh metrics
+      await commandService.toggleScheduleBlock(blockId, selectedDate);
       const updated = await commandService.getTodayData();
       setData(updated);
-      notifyGlobalProgressSync();
+      swrCache.set('command:today', updated);
     } catch (err) {
       showToast('Failed to toggle block status.', 'error');
-      // Rollback
-      setScheduleBlocks((prev) =>
-        prev.map((b) => (b._id === blockId ? { ...b, isCompleted: !b.isCompleted } : b))
-      );
+      setScheduleBlocks(prevBlocks);
+      if (prevData) {
+        setData(prevData);
+        swrCache.set('command:today', prevData);
+      }
+      notifyGlobalProgressSync();
     }
   };
 
@@ -267,9 +307,9 @@ export default function CommandCenter() {
     setScheduleBlocks((prev) =>
       prev.map((b) => (b._id === blockId ? { ...b, isSkipped: !b.isSkipped } : b))
     );
+    notifyGlobalProgressSync();
     try {
       await commandService.skipScheduleBlock(blockId, selectedDate);
-      notifyGlobalProgressSync();
     } catch {
       showToast('Failed to skip block.', 'error');
     }
@@ -343,28 +383,74 @@ export default function CommandCenter() {
 
   const handleDeleteTask = async (taskId) => {
     if (!window.confirm('Delete this task?')) return;
+    const prevData = data;
+    // Optimistic deletion (< 1ms)
+    if (data && data.tasks) {
+      const updatedData = {
+        ...data,
+        tasks: {
+          ...data.tasks,
+          mustDo: (data.tasks.mustDo || []).filter((t) => t._id !== taskId),
+          shouldDo: (data.tasks.shouldDo || []).filter((t) => t._id !== taskId),
+          quickWins: (data.tasks.quickWins || []).filter((t) => t._id !== taskId),
+          overdue: (data.tasks.overdue || []).filter((t) => t._id !== taskId),
+        },
+      };
+      setData(updatedData);
+      swrCache.set('command:today', updatedData);
+    }
+    notifyGlobalProgressSync();
+    showToast('Task deleted');
+
     try {
       await taskService.deleteTask(taskId);
-      showToast('Task deleted');
       const updated = await commandService.getTodayData();
       setData(updated);
-      notifyGlobalProgressSync();
+      swrCache.set('command:today', updated);
     } catch {
       showToast('Failed to delete task', 'error');
+      if (prevData) {
+        setData(prevData);
+        swrCache.set('command:today', prevData);
+        notifyGlobalProgressSync();
+      }
     }
   };
 
-  // ── Task Actions ───────────────────────────────────────────────────────────
+  // ── Task Actions (100% Optimistic) ─────────────────────────────────────────
   const handleToggleTask = async (taskId) => {
+    const prevData = data;
+    // Optimistic toggle (< 1ms)
+    if (data && data.tasks) {
+      const toggleInList = (list = []) =>
+        list.map((t) => (t._id === taskId ? { ...t, completed: !t.completed } : t));
+      const updatedData = {
+        ...data,
+        tasks: {
+          ...data.tasks,
+          mustDo: toggleInList(data.tasks.mustDo),
+          shouldDo: toggleInList(data.tasks.shouldDo),
+          quickWins: toggleInList(data.tasks.quickWins),
+          overdue: toggleInList(data.tasks.overdue),
+        },
+      };
+      setData(updatedData);
+      swrCache.set('command:today', updatedData);
+    }
+    notifyGlobalProgressSync();
+
     try {
       await commandService.toggleTask(taskId);
-      showToast('Task updated');
-      // Refresh today data to recalculate score
       const updated = await commandService.getTodayData();
       setData(updated);
-      notifyGlobalProgressSync();
+      swrCache.set('command:today', updated);
     } catch {
       showToast('Failed to update task', 'error');
+      if (prevData) {
+        setData(prevData);
+        swrCache.set('command:today', prevData);
+        notifyGlobalProgressSync();
+      }
     }
   };
 
@@ -397,16 +483,58 @@ export default function CommandCenter() {
     }
   };
 
-  // ── Habit Actions ──────────────────────────────────────────────────────────
+  // ── Habit Actions (100% Optimistic Sub-Millisecond Reactions) ──────────────
   const handleToggleHabit = async (habitId) => {
+    confetti({ particleCount: 25, spread: 45, origin: { y: 0.8 } });
+    const prevData = data;
+
+    // 1. Mutate local state immediately (< 1ms)
+    if (data && data.habits) {
+      const nextHabits = data.habits.map((h) => {
+        if (h._id === habitId) {
+          return { ...h, isCompleted: !h.isCompleted };
+        }
+        return h;
+      });
+      const totalH = nextHabits.length;
+      const compH = nextHabits.filter((h) => h.isCompleted).length;
+      const habitScore = totalH > 0 ? Math.round((compH / totalH) * 100) : 100;
+
+      const updatedData = {
+        ...data,
+        habits: nextHabits,
+        summary: {
+          ...data.summary,
+          habitScore,
+          dailyScore: Math.round(
+            (data.summary?.scheduleScore ?? 100) * 0.30 +
+            (data.summary?.taskScore ?? 100) * 0.25 +
+            habitScore * 0.20 +
+            (data.summary?.workoutScore ?? 100) * 0.15 +
+            (data.summary?.studyScore ?? 100) * 0.10
+          ),
+        },
+      };
+      setData(updatedData);
+      swrCache.set('command:today', updatedData);
+    }
+
+    // 2. Dispatch progress sync immediately on the same frame (< 1ms)
+    notifyGlobalProgressSync();
+
+    // 3. Network call in background
     try {
       await commandService.toggleHabit(habitId, selectedDate);
-      confetti({ particleCount: 25, spread: 45, origin: { y: 0.8 } });
       const updated = await commandService.getTodayData();
       setData(updated);
-      notifyGlobalProgressSync();
+      swrCache.set('command:today', updated);
     } catch {
       showToast('Failed to toggle habit', 'error');
+      if (prevData) {
+        setData(prevData);
+        swrCache.set('command:today', prevData);
+        notifyGlobalProgressSync();
+      }
     }
   };
 
@@ -420,6 +548,7 @@ export default function CommandCenter() {
       handleDateChange(selectedDate);
       const updated = await commandService.getTodayData();
       setData(updated);
+      swrCache.set('command:today', updated);
       notifyGlobalProgressSync();
     } catch (err) {
       showToast('Failed to log workout', 'error');
@@ -452,7 +581,7 @@ export default function CommandCenter() {
     }
   };
 
-  if (loading) {
+  if (loading && !data) {
     return (
       <div className="command-page flex items-center justify-center min-h-[60vh]">
         <div className="text-center space-y-3">

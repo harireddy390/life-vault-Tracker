@@ -20,5 +20,8 @@ const habitSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+habitSchema.index({ user: 1, active: 1, createdAt: -1 });
+habitSchema.index({ user: 1, startDate: 1 });
+habitSchema.index({ user: 1, frequency: 1 });
 
 module.exports = mongoose.models.Habit || mongoose.model('Habit', habitSchema);

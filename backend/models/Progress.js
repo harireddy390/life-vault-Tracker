@@ -11,6 +11,8 @@ const progressSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 progressSchema.index({ user: 1, date: 1 });
+progressSchema.index({ user: 1, date: 1, completed: 1 });
 progressSchema.index({ user: 1, task: 1, date: 1 }, { unique: true });
+progressSchema.index({ user: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Progress', progressSchema);
