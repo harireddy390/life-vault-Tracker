@@ -489,6 +489,54 @@ router.delete('/schedule/:id', protect, async (req, res) => {
   }
 });
 
+// ── DELETE /api/command/schedule/:id/day/:dayIndex ───────────────────────────
+// Removes a specific day from a recurring block's daysOfWeek array.
+// If the block has only one day left, it deletes the entire block.
+// Non-recurring blocks are deleted outright.
+router.delete('/schedule/:id/day/:dayIndex', protect, async (req, res) => {
+  try {
+    const dayIndex = parseInt(req.params.dayIndex, 10);
+    if (isNaN(dayIndex) || dayIndex < 0 || dayIndex > 6) {
+      return res.status(400).json({ message: 'Invalid day index. Must be 0-6 (Sun-Sat).' });
+    }
+
+    const block = await ScheduleBlock.findOne({ _id: req.params.id, user: req.user.id });
+    if (!block) return res.status(404).json({ message: 'Schedule block not found' });
+
+    // Non-recurring: delete the entire block
+    if (!block.isRecurring) {
+      await block.deleteOne();
+      await RoutineReminderLog.deleteMany({ scheduleBlock: block._id, user: req.user.id }).catch(() => {});
+      return res.json({ message: 'Non-recurring block removed', deleted: true });
+    }
+
+    // Recurring: remove the specific day
+    const updatedDays = (block.daysOfWeek || []).filter((d) => d !== dayIndex);
+
+    if (updatedDays.length === 0) {
+      // Last day removed — delete the entire block
+      await block.deleteOne();
+      await RoutineReminderLog.deleteMany({ scheduleBlock: block._id, user: req.user.id }).catch(() => {});
+      return res.json({ message: 'Block removed (last day deleted)', deleted: true });
+    }
+
+    block.daysOfWeek = updatedDays;
+    await block.save();
+
+    // Clear reminder logs for accuracy
+    await RoutineReminderLog.deleteMany({ scheduleBlock: block._id, user: req.user.id }).catch(() => {});
+
+    res.json({
+      message: `Removed ${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][dayIndex]} from "${block.title}"`,
+      deleted: false,
+      remainingDays: updatedDays,
+      block,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // ── POST /api/command/schedule/:id/toggle ────────────────────────────────────
 // Toggle block completion for a specific IST date
 router.post('/schedule/:id/toggle', protect, async (req, res) => {

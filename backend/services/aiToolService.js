@@ -664,6 +664,119 @@ async function executeTool(toolName, args = {}, userId, isConfirmed = false) {
       };
     }
 
+    // -------------------------------------------------------------
+    // TOOL: tasks_delete
+    // -------------------------------------------------------------
+    case 'tasks_delete': {
+      const { taskId, title } = args;
+      let task = null;
+
+      // Find by ID first, then fall back to fuzzy title match
+      if (taskId && mongoose.isValidObjectId(taskId)) {
+        task = await Task.findOne({ _id: taskId, user: userId });
+      }
+      if (!task && title) {
+        // Fuzzy search: find the best matching active task by title
+        task = await Task.findOne({
+          user: userId,
+          text: { $regex: title.trim(), $options: 'i' },
+          active: true,
+        });
+      }
+      if (!task && title) {
+        // Broaden search: also check completed tasks
+        task = await Task.findOne({
+          user: userId,
+          text: { $regex: title.trim(), $options: 'i' },
+        });
+      }
+
+      if (!task) {
+        throw new Error(`Could not find a task matching "${taskId || title}". Please verify the exact task name.`);
+      }
+
+      const deletedText = task.text;
+      const deletedId = task._id;
+
+      // Delete task and associated progress records
+      const Progress = require('../models/Progress');
+      await Promise.all([
+        task.deleteOne(),
+        Progress.deleteMany({ task: deletedId, user: userId }),
+      ]);
+
+      try {
+        await ActivityLog.create({
+          user: userId,
+          module: 'tasks',
+          action_type: 'task_deleted',
+          intensity_weight: 1,
+          date_key: getISTCurrentDateTime().dateStr,
+          metadata: { taskId: deletedId, text: deletedText },
+        });
+      } catch {}
+
+      return {
+        status: 'executed',
+        toolName,
+        response: {
+          success: true,
+          task: {
+            id: deletedId,
+            text: deletedText,
+          },
+          message: `Task deleted: "${deletedText}"`,
+        },
+      };
+    }
+
+    // -------------------------------------------------------------
+    // TOOL: schedule_delete_block
+    // -------------------------------------------------------------
+    case 'schedule_delete_block': {
+      const { blockId, title: blockTitle } = args;
+      let block = null;
+
+      if (blockId && mongoose.isValidObjectId(blockId)) {
+        block = await ScheduleBlock.findOne({ _id: blockId, user: userId });
+      }
+      if (!block && blockTitle) {
+        block = await ScheduleBlock.findOne({
+          user: userId,
+          title: { $regex: blockTitle.trim(), $options: 'i' },
+        });
+      }
+
+      if (!block) {
+        throw new Error(`Could not find a routine/schedule block matching "${blockId || blockTitle}".`);
+      }
+
+      const deletedTitle = block.title;
+      const deletedBlockId = block._id;
+      await block.deleteOne();
+
+      try {
+        await ActivityLog.create({
+          user: userId,
+          module: 'schedule',
+          action_type: 'schedule_deleted',
+          intensity_weight: 1,
+          date_key: getISTCurrentDateTime().dateStr,
+          metadata: { blockId: deletedBlockId, title: deletedTitle },
+        });
+      } catch {}
+
+      return {
+        status: 'executed',
+        toolName,
+        response: {
+          success: true,
+          block: { id: deletedBlockId, title: deletedTitle },
+          message: `Routine deleted: "${deletedTitle}"`,
+        },
+      };
+    }
+
     default:
       throw new Error(`Unsupported tool: ${toolName}`);
   }

@@ -1,7 +1,13 @@
 import { useState } from 'react';
+import { cleanAIMessageContent, isToolCallCodeBlock } from '../utils/cleanAIContent';
 
 function CodeBlock({ lang, code }) {
   const [copied, setCopied] = useState(false);
+
+  // Visually hide any raw tool_call, function arguments, or action JSON blocks
+  if (isToolCallCodeBlock(lang, code)) {
+    return null;
+  }
 
   const handleCopy = async () => {
     try {
@@ -93,6 +99,9 @@ export default function MarkdownLite({ text }) {
     }
   }
 
+  // Filter out any tool_call, function_call, or raw tool argument blocks from display
+  mainText = cleanAIMessageContent(mainText);
+
   const blocks = mainText ? mainText.split(/\n{2,}/) : [];
 
   const renderInline = (line, key) => {
@@ -171,7 +180,13 @@ export default function MarkdownLite({ text }) {
           const langMatch = trimmed.match(/^```([a-zA-Z0-9_-]*)\n?/);
           const lang = langMatch ? langMatch[1] : '';
           const code = trimmed.replace(/^```[a-zA-Z0-9_-]*\n?/, '').replace(/```$/, '');
+          if (isToolCallCodeBlock(lang, code)) return null;
           return <CodeBlock key={i} lang={lang} code={code} />;
+        }
+
+        // Raw JSON tool invocation fallback
+        if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+          if (isToolCallCodeBlock('json', trimmed)) return null;
         }
 
         const lines = trimmed.split('\n');

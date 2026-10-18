@@ -40,6 +40,40 @@ export default function ActionFeedbackPill({ toolCall }) {
     );
   }
 
+  if (name === 'tasks_delete') {
+    const t = response.task || {};
+    const taskName = t.text || toolCall.arguments?.title || 'Task';
+    return (
+      <div className="action-pill action-pill-success">
+        <span className="action-icon">✅</span>
+        <div className="action-text-wrap">
+          <strong>Task Deleted:</strong>
+          <span className="action-highlight">"{taskName}"</span>
+        </div>
+        <Link to="/planner" className="action-link">
+          View in Planner →
+        </Link>
+      </div>
+    );
+  }
+
+  if (name === 'schedule_delete_block') {
+    const b = response.block || {};
+    const blockTitle = b.title || toolCall.arguments?.title || 'Routine';
+    return (
+      <div className="action-pill action-pill-success">
+        <span className="action-icon">✅</span>
+        <div className="action-text-wrap">
+          <strong>Routine Deleted:</strong>
+          <span className="action-highlight">"{blockTitle}"</span>
+        </div>
+        <Link to="/command" className="action-link">
+          Command Center →
+        </Link>
+      </div>
+    );
+  }
+
   if (name === 'health_log_vital' && response.vital) {
     const v = response.vital;
     return (

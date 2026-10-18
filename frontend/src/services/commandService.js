@@ -30,6 +30,11 @@ export const deleteScheduleBlock = async (id) => {
   return res.data;
 };
 
+export const deleteScheduleBlockForDay = async (id, dayIndex) => {
+  const res = await api.delete(`/command/schedule/${id}/day/${dayIndex}`);
+  return res.data;
+};
+
 export const toggleScheduleBlock = async (id, date) => {
   const res = await api.post(`/command/schedule/${id}/toggle`, { date });
   return res.data;
@@ -83,9 +88,11 @@ export const submitWeeklyReview = async (reviewData) => {
 export default {
   getTodayData,
   getSchedule,
+  getWeeklySchedule,
   saveScheduleBlock,
   updateScheduleBlock,
   deleteScheduleBlock,
+  deleteScheduleBlockForDay,
   toggleScheduleBlock,
   skipScheduleBlock,
   seedRoutine,

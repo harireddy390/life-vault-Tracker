@@ -5,6 +5,7 @@ import progressAnalyticsService from '../services/progressAnalyticsService';
 import ProgressCalendar from '../components/ProgressCalendar';
 import DailyProgress from '../components/DailyProgress';
 import CreateHabitModal from '../components/CreateHabitModal';
+import ConfirmDeleteHabitModal from '../components/ConfirmDeleteHabitModal';
 import ContributionHeatmap from '../components/ContributionHeatmap';
 import Toast from '../components/Toast';
 import { toLocalDateString } from '../utils/date';
@@ -49,6 +50,9 @@ export default function Planner() {
   const [dayLoading, setDayLoading] = useState(true);
   const [stats, setStats] = useState(null);
   const [showHabitModal, setShowHabitModal] = useState(false);
+  const [editingHabit, setEditingHabit] = useState(null);
+  const [deletingHabit, setDeletingHabit] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const [heatmapYear, setHeatmapYear] = useState(now.getFullYear());
   const [heatmapDays, setHeatmapDays] = useState([]);
@@ -136,6 +140,21 @@ export default function Planner() {
     }
   }, [activeTab, loadMonth, loadDay, selectedDate, loadStats, loadYear]);
 
+  // Synchronize state across modules when Command Center or other components complete routines/tasks
+  useEffect(() => {
+    const handleSync = () => {
+      loadAnalytics();
+      if (activeTab === 'habits') {
+        loadMonth();
+        loadDay(selectedDate);
+        loadStats();
+        loadYear();
+      }
+    };
+    window.addEventListener('lifevault:progress-sync', handleSync);
+    return () => window.removeEventListener('lifevault:progress-sync', handleSync);
+  }, [loadAnalytics, activeTab, loadMonth, loadDay, selectedDate, loadStats, loadYear]);
+
   const handleSelectDate = (date) => setSelectedDate(date);
 
   const handlePrevMonth = () => {
@@ -147,9 +166,16 @@ export default function Planner() {
     else setMonth((m) => m + 1);
   };
 
+  const notifyProgressSync = () => {
+    window.dispatchEvent(
+      new CustomEvent('lifevault:progress-sync', { detail: { timestamp: Date.now() } })
+    );
+  };
+
   const handleToggle = async (task) => {
     const nextCompleted = !task.completed;
     setDayData((prev) => {
+      if (!prev || !prev.tasks) return prev;
       const tasks = prev.tasks.map((t) => (t._id === task._id ? { ...t, completed: nextCompleted } : t));
       const completedCount = tasks.filter((t) => t.completed).length;
       return {
@@ -164,8 +190,9 @@ export default function Planner() {
       loadMonth();
       loadStats();
       loadYear();
-      // Also silently re-sync analytics data in background
+      // Silently re-sync analytics data in background
       loadAnalytics();
+      notifyProgressSync();
     } catch {
       showToast('Could not save progress — reloading.', 'error');
       loadDay(selectedDate);
@@ -175,10 +202,82 @@ export default function Planner() {
   const handleCreateTask = async (habitData) => {
     await habitService.createHabit(habitData);
     setShowHabitModal(false);
-    showToast('Task created.');
-    loadDay(selectedDate);
-    loadMonth();
-    loadAnalytics();
+    setEditingHabit(null);
+    showToast('Task created successfully.');
+    await Promise.all([
+      loadDay(selectedDate),
+      loadMonth(),
+      loadStats(),
+      loadYear(),
+      loadAnalytics(),
+    ]);
+    notifyProgressSync();
+  };
+
+  const handleEditTask = (habit) => {
+    setEditingHabit(habit);
+    setShowHabitModal(true);
+  };
+
+  const handleUpdateTask = async (id, payload) => {
+    await habitService.updateHabit(id, payload);
+    setShowHabitModal(false);
+    setEditingHabit(null);
+    showToast('Task updated successfully.');
+    await Promise.all([
+      loadDay(selectedDate),
+      loadMonth(),
+      loadStats(),
+      loadYear(),
+      loadAnalytics(),
+    ]);
+    notifyProgressSync();
+  };
+
+  const handleDeleteTask = (habit) => {
+    setDeletingHabit(habit);
+  };
+
+  const handleConfirmDelete = async ({ mode, date }) => {
+    if (!deletingHabit) return;
+    setDeleteLoading(true);
+
+    // Optimistically update dayData state immediately
+    setDayData((prev) => {
+      if (!prev || !prev.tasks) return prev;
+      const filtered = prev.tasks.filter((t) => t._id !== deletingHabit._id);
+      const completedCount = filtered.filter((t) => t.completed).length;
+      return {
+        ...prev,
+        tasks: filtered,
+        summary: {
+          ...prev.summary,
+          totalScheduled: filtered.length,
+          completedCount,
+          percentage: filtered.length > 0 ? Math.round((completedCount / filtered.length) * 100) : 0,
+          allCompleted: filtered.length > 0 && completedCount === filtered.length,
+        },
+      };
+    });
+
+    try {
+      await habitService.deleteHabit(deletingHabit._id, { mode, date });
+      setDeletingHabit(null);
+      showToast(mode === 'day' ? 'Task removed for this date.' : 'Task deleted successfully.');
+      await Promise.all([
+        loadDay(selectedDate),
+        loadMonth(),
+        loadStats(),
+        loadYear(),
+        loadAnalytics(),
+      ]);
+      notifyProgressSync();
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Could not delete task.', 'error');
+      loadDay(selectedDate);
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   const handleSubmitReflection = async (refData) => {
@@ -316,8 +415,16 @@ export default function Planner() {
 
             <div className="card progress-daily-panel">
               <DailyProgress
-                date={selectedDate} data={dayData} loading={dayLoading}
-                onToggle={handleToggle} onAddTask={() => setShowHabitModal(true)}
+                date={selectedDate}
+                data={dayData}
+                loading={dayLoading}
+                onToggle={handleToggle}
+                onAddTask={() => {
+                  setEditingHabit(null);
+                  setShowHabitModal(true);
+                }}
+                onEditTask={handleEditTask}
+                onDeleteTask={handleDeleteTask}
               />
             </div>
           </div>
@@ -358,10 +465,24 @@ export default function Planner() {
       {showHabitModal && (
         <CreateHabitModal
           defaultStartDate={selectedDate}
-          onClose={() => setShowHabitModal(false)}
+          initialData={editingHabit}
+          onClose={() => {
+            setShowHabitModal(false);
+            setEditingHabit(null);
+          }}
           onCreate={handleCreateTask}
+          onUpdate={handleUpdateTask}
         />
       )}
+
+      <ConfirmDeleteHabitModal
+        isOpen={Boolean(deletingHabit)}
+        habit={deletingHabit}
+        selectedDate={selectedDate}
+        onClose={() => setDeletingHabit(null)}
+        onConfirmDelete={handleConfirmDelete}
+        loading={deleteLoading}
+      />
 
     </div>
   );

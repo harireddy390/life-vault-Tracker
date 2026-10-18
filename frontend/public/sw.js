@@ -67,3 +67,32 @@ self.addEventListener('notificationclick', (event) => {
     })
   );
 });
+
+// ---------------------------------------------------------------------------
+// Background Step Counter State Synchronization
+// ---------------------------------------------------------------------------
+let currentDayStepState = {
+  date: null,
+  steps: 0,
+  lastUpdated: Date.now(),
+};
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'STEP_STATE_SYNC') {
+    currentDayStepState = {
+      date: event.data.date,
+      steps: event.data.steps,
+      lastUpdated: Date.now(),
+    };
+    if (event.ports && event.ports[0]) {
+      event.ports[0].postMessage({ status: 'synced', state: currentDayStepState });
+    }
+  }
+
+  if (event.data && event.data.type === 'GET_STEP_STATE') {
+    if (event.ports && event.ports[0]) {
+      event.ports[0].postMessage({ state: currentDayStepState });
+    }
+  }
+});
+

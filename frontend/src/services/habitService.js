@@ -27,10 +27,14 @@ export const updateHabit = async (id, updates) => {
 };
 
 /**
- * Delete a habit permanently.
+ * Delete a habit (permanently or day-specific).
+ * options can be { mode: 'day', date: 'YYYY-MM-DD' }
  */
-export const deleteHabit = async (id) => {
-  const response = await api.delete(`/habits/${id}`);
+export const deleteHabit = async (id, options = {}) => {
+  const params = {};
+  if (options.mode) params.mode = options.mode;
+  if (options.date) params.date = options.date;
+  const response = await api.delete(`/habits/${id}`, { params });
   return response.data;
 };
 

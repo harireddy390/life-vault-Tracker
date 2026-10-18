@@ -98,6 +98,20 @@ export default function CommandCenter() {
     loadTodayData();
   }, [loadTodayData]);
 
+  // Synchronize CommandCenter when habits or progress are updated across modules
+  useEffect(() => {
+    const handleProgressSync = () => {
+      loadTodayData();
+      if (selectedDate) {
+        commandService.getSchedule(selectedDate).then((res) => {
+          if (res?.blocks) setScheduleBlocks(res.blocks);
+        }).catch(() => {});
+      }
+    };
+    window.addEventListener('lifevault:progress-sync', handleProgressSync);
+    return () => window.removeEventListener('lifevault:progress-sync', handleProgressSync);
+  }, [loadTodayData, selectedDate]);
+
   // Periodic timer tick (every 30s) to keep active schedule block and list updated
   useEffect(() => {
     const timer = setInterval(() => {
@@ -220,6 +234,10 @@ export default function CommandCenter() {
     handleDateChange(date.toISOString().split('T')[0]);
   };
 
+  const notifyGlobalProgressSync = () => {
+    window.dispatchEvent(new CustomEvent('lifevault:progress-sync', { detail: { timestamp: Date.now() } }));
+  };
+
   // ── Schedule Block Actions (Optimistic) ────────────────────────────────────
   const handleToggleBlock = async (blockId) => {
     // Optimistic toggle
@@ -235,6 +253,7 @@ export default function CommandCenter() {
       // Refresh metrics
       const updated = await commandService.getTodayData();
       setData(updated);
+      notifyGlobalProgressSync();
     } catch (err) {
       showToast('Failed to toggle block status.', 'error');
       // Rollback
@@ -250,6 +269,7 @@ export default function CommandCenter() {
     );
     try {
       await commandService.skipScheduleBlock(blockId, selectedDate);
+      notifyGlobalProgressSync();
     } catch {
       showToast('Failed to skip block.', 'error');
     }
@@ -270,6 +290,7 @@ export default function CommandCenter() {
       await handleDateChange(selectedDate);
       const updated = await commandService.getTodayData();
       setData(updated);
+      notifyGlobalProgressSync();
       if (scheduleViewMode === 'weekly') {
         loadWeeklyData();
       }
@@ -281,21 +302,55 @@ export default function CommandCenter() {
     }
   };
 
-  const handleDeleteBlock = async (blockId) => {
-    if (!window.confirm('Delete this routine?')) return;
+  const handleDeleteBlock = async (blockId, dayIndex = null, dayName = '') => {
+    let removeDayOnly = false;
+    if (dayIndex !== null && dayIndex !== undefined) {
+      const confirmDayOnly = window.confirm(
+        `Remove routine for ${dayName || 'this day'} only?\n\n• Click OK to remove from ${dayName || 'this day'} only\n• Click Cancel to permanently delete from all days`
+      );
+      if (confirmDayOnly) {
+        removeDayOnly = true;
+      } else {
+        if (!window.confirm('Are you sure you want to permanently delete this routine from ALL days?')) {
+          return;
+        }
+      }
+    } else {
+      if (!window.confirm('Delete this routine?')) return;
+    }
+
     try {
-      await commandService.deleteScheduleBlock(blockId);
+      if (removeDayOnly) {
+        await commandService.deleteScheduleBlockForDay(blockId, dayIndex);
+        showToast(`Routine removed for ${dayName || 'selected day'}`);
+      } else {
+        await commandService.deleteScheduleBlock(blockId);
+        showToast('Routine deleted');
+      }
       setShowBlockModal(false);
       setEditingBlock(null);
-      showToast('Routine deleted');
       await handleDateChange(selectedDate);
       const updated = await commandService.getTodayData();
       setData(updated);
+      notifyGlobalProgressSync();
       if (scheduleViewMode === 'weekly') {
         loadWeeklyData();
       }
     } catch {
       showToast('Failed to delete routine', 'error');
+    }
+  };
+
+  const handleDeleteTask = async (taskId) => {
+    if (!window.confirm('Delete this task?')) return;
+    try {
+      await taskService.deleteTask(taskId);
+      showToast('Task deleted');
+      const updated = await commandService.getTodayData();
+      setData(updated);
+      notifyGlobalProgressSync();
+    } catch {
+      showToast('Failed to delete task', 'error');
     }
   };
 
@@ -307,6 +362,7 @@ export default function CommandCenter() {
       // Refresh today data to recalculate score
       const updated = await commandService.getTodayData();
       setData(updated);
+      notifyGlobalProgressSync();
     } catch {
       showToast('Failed to update task', 'error');
     }
@@ -332,6 +388,7 @@ export default function CommandCenter() {
       setEditingTask(null);
       const updated = await commandService.getTodayData();
       setData(updated);
+      notifyGlobalProgressSync();
     } catch (err) {
       const errMsg = err?.response?.data?.message || 'Failed to save task';
       showToast(errMsg, 'error');
@@ -347,6 +404,7 @@ export default function CommandCenter() {
       confetti({ particleCount: 25, spread: 45, origin: { y: 0.8 } });
       const updated = await commandService.getTodayData();
       setData(updated);
+      notifyGlobalProgressSync();
     } catch {
       showToast('Failed to toggle habit', 'error');
     }
@@ -362,6 +420,7 @@ export default function CommandCenter() {
       handleDateChange(selectedDate);
       const updated = await commandService.getTodayData();
       setData(updated);
+      notifyGlobalProgressSync();
     } catch (err) {
       showToast('Failed to log workout', 'error');
     } finally {
@@ -554,7 +613,15 @@ export default function CommandCenter() {
           </button>
           <button
             type="button"
-            onClick={() => handleDeleteBlock(block._id)}
+            onClick={() => {
+              const dayIndex = selectedDate ? new Date(selectedDate + 'T00:00:00').getDay() : null;
+              const dayName = dayIndex !== null ? ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayIndex] : '';
+              if (block.isRecurring && Array.isArray(block.daysOfWeek) && block.daysOfWeek.length > 1) {
+                handleDeleteBlock(block._id, dayIndex, dayName);
+              } else {
+                handleDeleteBlock(block._id);
+              }
+            }}
             className="p-1.5 sm:p-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
             title="Delete Routine"
             aria-label={`Delete ${block.title}`}
@@ -1126,7 +1193,13 @@ export default function CommandCenter() {
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() => handleDeleteBlock(b._id)}
+                                    onClick={() => {
+                                      if (b.isRecurring && Array.isArray(b.daysOfWeek) && b.daysOfWeek.length > 1) {
+                                        handleDeleteBlock(b._id, day.dayIndex, day.name);
+                                      } else {
+                                        handleDeleteBlock(b._id);
+                                      }
+                                    }}
                                     className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
                                     title="Delete Routine"
                                     aria-label={`Delete ${b.title}`}
@@ -1254,6 +1327,15 @@ export default function CommandCenter() {
                         aria-label={`Edit ${t.text}`}
                       >
                         <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteTask(t._id)}
+                        className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                        title="Delete Task"
+                        aria-label={`Delete ${t.text}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>

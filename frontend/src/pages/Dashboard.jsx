@@ -80,6 +80,14 @@ export default function Dashboard() {
   // ── Load remote data ──────────────────────────────────────────────────────
   useEffect(() => { loadData(); }, []);
 
+  useEffect(() => {
+    const handleSync = () => {
+      loadData();
+    };
+    window.addEventListener('lifevault:progress-sync', handleSync);
+    return () => window.removeEventListener('lifevault:progress-sync', handleSync);
+  }, []);
+
   const loadData = async () => {
     setLoading(true);
     try {

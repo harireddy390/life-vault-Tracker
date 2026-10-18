@@ -6,6 +6,7 @@ const Progress = require('../models/Progress');
 const WeeklyReflection = require('../models/WeeklyReflection');
 const LifeScoreSnapshot = require('../models/LifeScoreSnapshot');
 const ActivityLog = require('../models/ActivityLog');
+const ScheduleBlock = require('../models/ScheduleBlock');
 const { protect } = require('../middleware/authMiddleware');
 const {
   formatDateKey,
@@ -104,12 +105,14 @@ router.get('/month/:year/:month', protect, async (req, res) => {
     const prefix = `${year}-${monthStr}`;
     const daysInMonth = new Date(year, month, 0).getDate();
 
-    const habits = await Habit.find({ user: req.user.id, active: true });
-
-    const progressRecords = await Progress.find({
-      user: req.user.id,
-      date: { $regex: `^${prefix}` },
-    });
+    const [habits, scheduleBlocks, progressRecords] = await Promise.all([
+      Habit.find({ user: req.user.id, active: true }),
+      ScheduleBlock.find({ user: req.user.id }),
+      Progress.find({
+        user: req.user.id,
+        date: { $regex: `^${prefix}` },
+      }),
+    ]);
 
     const progressByDate = {};
     progressRecords.forEach((pr) => {
@@ -126,11 +129,22 @@ router.get('/month/:year/:month', protect, async (req, res) => {
     for (let day = 1; day <= daysInMonth; day++) {
       const dayStr = String(day).padStart(2, '0');
       const dateKey = `${prefix}-${dayStr}`;
+      const dayDate = new Date(`${dateKey}T00:00:00`);
+      const dayOfWeek = dayDate.getDay();
 
-      const scheduledForDay = habits.filter((h) => isTaskScheduledOnDate(h, dateKey));
+      const scheduledHabits = habits.filter((h) => isTaskScheduledOnDate(h, dateKey));
+      const scheduledRoutines = (scheduleBlocks || []).filter((sb) =>
+        sb.isRecurring ? (sb.daysOfWeek || []).includes(dayOfWeek) : sb.date === dateKey
+      );
+
       const recordsForDay = progressByDate[dateKey] || [];
-      const completedForDay = recordsForDay.filter((r) => r.completed).length;
-      const scheduledCount = scheduledForDay.length;
+      const completedHabits = recordsForDay.filter((r) => r.completed).length;
+      const completedRoutines = (scheduleBlocks || []).filter((sb) =>
+        (sb.completedDates || []).includes(dateKey) || (!sb.isRecurring && sb.completed && sb.date === dateKey)
+      ).length;
+
+      const completedForDay = completedHabits + completedRoutines;
+      const scheduledCount = scheduledHabits.length + scheduledRoutines.length;
       const percentage = scheduledCount > 0 ? Math.round((completedForDay / scheduledCount) * 100) : 0;
 
       if (completedForDay > 0) activeDaysCount++;
@@ -418,12 +432,14 @@ router.get('/year/:year', protect, async (req, res) => {
     const firstDate = `${year}-01-01`;
     const lastDate = `${year}-12-31`;
 
-    const allHabits = await Habit.find({ user: req.user.id });
-
-    const records = await Progress.find({
-      user: req.user.id,
-      date: { $gte: firstDate, $lte: lastDate },
-    });
+    const [allHabits, scheduleBlocks, records] = await Promise.all([
+      Habit.find({ user: req.user.id }),
+      ScheduleBlock.find({ user: req.user.id }),
+      Progress.find({
+        user: req.user.id,
+        date: { $gte: firstDate, $lte: lastDate },
+      }),
+    ]);
     const recordsByDate = new Map();
     records.forEach((r) => {
       if (!recordsByDate.has(r.date)) recordsByDate.set(r.date, []);
@@ -438,11 +454,21 @@ router.get('/year/:year', protect, async (req, res) => {
       const m = String(d.getUTCMonth() + 1).padStart(2, '0');
       const day = String(d.getUTCDate()).padStart(2, '0');
       const dateStr = `${y}-${m}-${day}`;
+      const dayOfWeek = d.getUTCDay();
 
-      const scheduled = allHabits.filter((h) => isTaskScheduledOnDate(h, dateStr));
+      const scheduledHabits = allHabits.filter((h) => isTaskScheduledOnDate(h, dateStr));
+      const scheduledRoutines = (scheduleBlocks || []).filter((sb) =>
+        sb.isRecurring ? (sb.daysOfWeek || []).includes(dayOfWeek) : sb.date === dateStr
+      );
+
       const dayRecords = recordsByDate.get(dateStr) || [];
-      const completedCount = dayRecords.filter((r) => r.completed).length;
-      const totalCount = scheduled.length;
+      const completedHabits = dayRecords.filter((r) => r.completed).length;
+      const completedRoutines = (scheduleBlocks || []).filter((sb) =>
+        (sb.completedDates || []).includes(dateStr) || (!sb.isRecurring && sb.completed && sb.date === dateStr)
+      ).length;
+
+      const completedCount = completedHabits + completedRoutines;
+      const totalCount = scheduledHabits.length + scheduledRoutines.length;
 
       days.push({
         date: dateStr,

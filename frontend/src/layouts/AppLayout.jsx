@@ -173,7 +173,7 @@ export default function AppLayout({ children }) {
   const userInitial = user?.name ? user.name[0].toUpperCase() : '?';
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col relative selection:bg-purple-100 selection:text-purple-900">
+    <div className="app-layout-root min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col relative selection:bg-purple-100 selection:text-purple-900 w-full max-w-full overflow-x-hidden">
       {/* ========================================================================= */}
       {/* 1. GLASSMORPHIC TOP NAVBAR (Desktop & Mobile Unified Header)               */}
       {/* ========================================================================= */}

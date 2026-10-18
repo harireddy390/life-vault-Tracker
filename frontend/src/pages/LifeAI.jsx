@@ -11,6 +11,7 @@ import DocumentViewerModal from '../components/DocumentViewerModal';
 import ScheduleBatchCard from '../components/ai/ScheduleBatchCard';
 import DocumentResultCard from '../components/ai/DocumentResultCard';
 import ActionFeedbackPill from '../components/ai/ActionFeedbackPill';
+import { cleanAIMessageContent } from '../utils/cleanAIContent';
 import './LifeAI.css';
 
 import {
@@ -64,18 +65,18 @@ function ChatBubble({
 }) {
   const [copied, setCopied] = useState(false);
   const isUser = message.role === 'user';
-  const showTypingDots = !isUser && isStreaming && (!message.content || message.content.length === 0);
+  const displayContent = !isUser ? cleanAIMessageContent(message.content) : message.content;
+  const toolCalls = message.tool_calls || [];
+  const showTypingDots = !isUser && isStreaming && (!displayContent || displayContent.length === 0) && toolCalls.length === 0;
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(message.content);
+      await navigator.clipboard.writeText(displayContent || message.content);
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
       onCopy?.();
     } catch {}
   };
-
-  const toolCalls = message.tool_calls || [];
 
   return (
     <div className={`chat-bubble-row ${isUser ? 'chat-row-user' : 'chat-row-ai'}`}>
@@ -104,7 +105,7 @@ function ChatBubble({
         )}
 
         {/* Bubble Text Body */}
-        {(message.content || showTypingDots) && (
+        {(displayContent || showTypingDots) && (
           <div className={`chat-bubble ${isUser ? 'chat-bubble-user' : 'chat-bubble-ai'}`}>
             {showTypingDots ? (
               <span className="chat-typing-dots">
@@ -116,7 +117,7 @@ function ChatBubble({
               <p className="user-message-text">{message.content}</p>
             ) : (
               <>
-                <MarkdownLite text={message.content} />
+                <MarkdownLite text={displayContent} />
                 {isStreaming && <span className="chat-cursor" aria-hidden="true" />}
               </>
             )}

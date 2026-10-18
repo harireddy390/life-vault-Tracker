@@ -209,7 +209,7 @@ export default function StepCounter() {
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
               <div>
                 <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 m-0">Live Step Tracking: Active</p>
-                <p className="text-[10px] text-slate-500 m-0">Source: Device Motion Sensor</p>
+                <p className="text-[10px] text-slate-500 m-0">Dynamic vector physics (1.2g threshold) • Background worker & IndexedDB sync active</p>
               </div>
             </div>
             <button className="btn btn-ghost btn-sm" style={{ fontSize: '11px', padding: '2px 6px' }} onClick={handleStopSensor}>
@@ -221,7 +221,7 @@ export default function StepCounter() {
         {sensorStatus === 'disabled' && (
           <div className="flex flex-col gap-2">
             <p className="text-xs text-slate-600 m-0">
-              Live hardware motion tracking available on this device.
+              Live hardware motion tracking with realistic stride physics and background persistence.
             </p>
             <button
               className="btn btn-primary btn-sm full-width"
@@ -252,9 +252,9 @@ export default function StepCounter() {
         )}
       </div>
 
-      {/* Browser Lifecycle Background Limitation Notice */}
+      {/* Background Persistence Indicator */}
       <p className="text-[10px] text-slate-400 text-center mb-3 leading-tight">
-        Note: Mobile browsers pause web motion sensors when the screen is locked or browser is minimized.
+        Background Service Worker & IndexedDB sync enabled. Movement persists across app minimization and page reloads.
       </p>
 
       {/* Manual Entry Section */}

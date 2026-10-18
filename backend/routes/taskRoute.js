@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Task = require('../models/tasks');
 const Progress = require('../models/Progress');
+const ActivityLog = require('../models/ActivityLog');
 const { protect } = require('../middleware/authMiddleware');
 
 // Helper to get today's date in YYYY-MM-DD format based on local server time
@@ -133,7 +134,7 @@ router.put('/:id', protect, async (req, res) => {
 });
 
 // @route   DELETE /api/tasks/:id
-// @desc    Delete a task and its progress records
+// @desc    Delete a task and its progress records (supports day-specific via ?mode=day&date=YYYY-MM-DD)
 router.delete('/:id', protect, async (req, res) => {
   try {
     const task = await Task.findById(req.params.id);
@@ -145,13 +146,58 @@ router.delete('/:id', protect, async (req, res) => {
       return res.status(401).json({ message: 'User not authorized to delete this task' });
     }
 
-    // Safely delete task and associated progress records concurrently
+    const { mode, date } = req.query;
+
+    if (mode === 'day' && date) {
+      const [yearStr, monthStr, dayStr] = date.split('-').map(Number);
+      const targetDateObj = new Date(Date.UTC(yearStr, monthStr - 1, dayStr));
+      const targetDayOfWeek = targetDateObj.getUTCDay();
+
+      let currentDays = [];
+      if (task.frequency === 'everyday') {
+        currentDays = [0, 1, 2, 3, 4, 5, 6];
+      } else if (task.frequency === 'weekdays') {
+        currentDays = [1, 2, 3, 4, 5];
+      } else if (task.frequency === 'weekends') {
+        currentDays = [0, 6];
+      } else if (Array.isArray(task.daysOfWeek) && task.daysOfWeek.length > 0) {
+        currentDays = [...task.daysOfWeek];
+      } else {
+        currentDays = [0, 1, 2, 3, 4, 5, 6];
+      }
+
+      const remainingDays = currentDays.filter((d) => d !== targetDayOfWeek);
+      await Progress.deleteMany({ task: task._id, user: req.user.id, date });
+
+      if (remainingDays.length === 0) {
+        await Promise.all([
+          task.deleteOne(),
+          Progress.deleteMany({ task: req.params.id, user: req.user.id }),
+          ActivityLog.deleteMany({
+            user: req.user.id,
+            $or: [{ 'metadata.taskId': req.params.id }, { 'metadata.habitId': req.params.id }],
+          }),
+        ]);
+        return res.status(200).json({ id: req.params.id, message: 'Task removed completely', mode: 'full' });
+      } else {
+        task.frequency = 'custom';
+        task.daysOfWeek = remainingDays;
+        await task.save();
+        return res.status(200).json({ id: req.params.id, task, mode: 'day', date, removedDay: targetDayOfWeek });
+      }
+    }
+
+    // Safely delete task and associated progress/activity records concurrently
     await Promise.all([
       task.deleteOne(),
       Progress.deleteMany({ task: req.params.id, user: req.user.id }),
+      ActivityLog.deleteMany({
+        user: req.user.id,
+        $or: [{ 'metadata.taskId': req.params.id }, { 'metadata.habitId': req.params.id }],
+      }),
     ]);
 
-    res.status(200).json({ id: req.params.id, message: 'Task and related progress records removed' });
+    res.status(200).json({ id: req.params.id, message: 'Task and related progress records removed', mode: 'global' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

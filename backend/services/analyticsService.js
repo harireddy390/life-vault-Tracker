@@ -10,6 +10,7 @@ const Document = require('../models/documents');
 const VitalsLog = require('../models/VitalsLog');
 const Medication = require('../models/Medication');
 const EmergencyContact = require('../models/EmergencyContact');
+const ScheduleBlock = require('../models/ScheduleBlock');
 const { calculateStreaks } = require('./streakService');
 
 // Helper to get formatted date string 'YYYY-MM-DD'
@@ -53,6 +54,7 @@ const calculateLifeScores = async (userId) => {
     vitals,
     meds,
     reflections,
+    scheduleBlocks,
   ] = await Promise.all([
     Goal.find({ user: userId }),
     GoalMilestone.find({ user: userId }),
@@ -63,6 +65,7 @@ const calculateLifeScores = async (userId) => {
     VitalsLog.find({ user: userId }).sort({ logged_at: -1 }).limit(10),
     Medication.find({ user: userId, active: true }),
     WeeklyReflection.find({ user: userId }).sort({ created_at: -1 }).limit(4),
+    ScheduleBlock.find({ user: userId }),
   ]);
 
   // A. GOALS SCORE (0–100%) - Genuine calculation from actual goals & milestones
@@ -101,20 +104,39 @@ const calculateLifeScores = async (userId) => {
   const emergencyPoints = Math.min(30, emergencyContacts.length * 15);
   vaultScore = Math.min(100, docPoints + emergencyPoints);
 
-  // D. HABITS SCORE (0–100%) - Genuine calculation from 7-day completion rate & streak
+  // D. HABITS & ROUTINES SCORE (0–100%) - Genuine calculation from 7-day completion rate of habits & CC routines
   let habitsScore = 0;
   const streakStats = calculateStreaks(progressList, habits);
   const currentStreak = streakStats.currentStreak || 0;
+
+  const now = new Date();
+  const past7DaysKeys = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    past7DaysKeys.push(d.toISOString().split('T')[0]);
+  }
+
+  let habitCompletions = 0;
+  const totalHabitOpportunities = habits.length * 7;
   if (habits.length > 0) {
-    const now = new Date();
-    const past7DaysKeys = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
-      past7DaysKeys.push(d.toISOString().split('T')[0]);
-    }
-    const recentProgress = progressList.filter((p) => past7DaysKeys.includes(p.date) && p.completed);
-    const completionRate = (recentProgress.length / (habits.length * 7)) * 100;
+    habitCompletions = progressList.filter((p) => past7DaysKeys.includes(p.date) && p.completed).length;
+  }
+
+  let routineCompletions = 0;
+  const totalRoutineOpportunities = (scheduleBlocks || []).length * 7;
+  if (scheduleBlocks && scheduleBlocks.length > 0) {
+    scheduleBlocks.forEach((sb) => {
+      const hits = (sb.completedDates || []).filter((cd) => past7DaysKeys.includes(cd)).length;
+      routineCompletions += hits;
+    });
+  }
+
+  const totalCompletions = habitCompletions + routineCompletions;
+  const totalOpportunities = totalHabitOpportunities + totalRoutineOpportunities;
+
+  if (totalOpportunities > 0) {
+    const completionRate = Math.min(100, (totalCompletions / totalOpportunities) * 100);
     const streakBonus = Math.min(30, currentStreak * 5);
     habitsScore = Math.min(100, Math.round(completionRate * 0.7 + streakBonus));
   }
@@ -133,7 +155,7 @@ const calculateLifeScores = async (userId) => {
   if (goals.length > 0) activeDomains.push(goalsScore);
   if (vitals.length > 0 || meds.length > 0) activeDomains.push(healthScore);
   if (docs.length > 0 || emergencyContacts.length > 0) activeDomains.push(vaultScore);
-  if (habits.length > 0) activeDomains.push(habitsScore);
+  if (habits.length > 0 || (scheduleBlocks && scheduleBlocks.length > 0)) activeDomains.push(habitsScore);
   if (reflections.length > 0) activeDomains.push(reflectionScore);
 
   const overallScore = activeDomains.length > 0
@@ -262,8 +284,8 @@ const generate365Heatmap = async (userId, year = 2026) => {
   const startDateStr = `${yr}-01-01`;
   const endDateStr = `${yr}-12-31`;
 
-  // Parallel fetch activity logs and habit progress
-  const [activityLogs, habitProgress] = await Promise.all([
+  // Parallel fetch activity logs, habit progress, and schedule block completions
+  const [activityLogs, habitProgress, scheduleBlocks] = await Promise.all([
     ActivityLog.find({
       user: userId,
       date_key: { $gte: startDateStr, $lte: endDateStr },
@@ -273,6 +295,10 @@ const generate365Heatmap = async (userId, year = 2026) => {
       date: { $gte: startDateStr, $lte: endDateStr },
       completed: true,
     }),
+    ScheduleBlock.find({
+      user: userId,
+      completedDates: { $exists: true, $not: { $size: 0 } },
+    }).select('completedDates category title').lean(),
   ]);
 
   // Aggregate by date_key
@@ -282,7 +308,7 @@ const generate365Heatmap = async (userId, year = 2026) => {
   activityLogs.forEach((log) => {
     const dk = log.date_key;
     if (!dayMap[dk]) {
-      dayMap[dk] = { count: 0, weight: 0, modules: { goals: 0, health: 0, vault: 0, journal: 0 } };
+      dayMap[dk] = { count: 0, weight: 0, modules: { goals: 0, health: 0, vault: 0, journal: 0, schedule: 0 } };
     }
     dayMap[dk].count += 1;
     dayMap[dk].weight += log.intensity_weight || 1;
@@ -295,11 +321,25 @@ const generate365Heatmap = async (userId, year = 2026) => {
   habitProgress.forEach((pr) => {
     const dk = pr.date;
     if (!dayMap[dk]) {
-      dayMap[dk] = { count: 0, weight: 0, modules: { goals: 0, health: 0, vault: 0, journal: 0 } };
+      dayMap[dk] = { count: 0, weight: 0, modules: { goals: 0, health: 0, vault: 0, journal: 0, schedule: 0 } };
     }
     dayMap[dk].count += 1;
     dayMap[dk].weight += 1;
     dayMap[dk].modules.journal += 1; // Counted in routine/journal
+  });
+
+  // 3. Blend in Command Center ScheduleBlock completions
+  scheduleBlocks.forEach((block) => {
+    (block.completedDates || []).forEach((dk) => {
+      if (dk < startDateStr || dk > endDateStr) return;
+      if (!dayMap[dk]) {
+        dayMap[dk] = { count: 0, weight: 0, modules: { goals: 0, health: 0, vault: 0, journal: 0, schedule: 0 } };
+      }
+      dayMap[dk].count += 1;
+      dayMap[dk].weight += 2; // Routine completions carry significant weight
+      if (!dayMap[dk].modules.schedule) dayMap[dk].modules.schedule = 0;
+      dayMap[dk].modules.schedule += 1;
+    });
   });
 
   // Generate full 365-day array
@@ -316,7 +356,7 @@ const generate365Heatmap = async (userId, year = 2026) => {
     const info = dayMap[dateKey] || {
       count: 0,
       weight: 0,
-      modules: { goals: 0, health: 0, vault: 0, journal: 0 },
+      modules: { goals: 0, health: 0, vault: 0, journal: 0, schedule: 0 },
     };
 
     // Calculate intensity 0–4

@@ -170,6 +170,10 @@ Available Tools:
 5. health_log_vital(metricType, valuePrimary, valueSecondary, unit)
 6. finance_add_transaction(title, amount, type, category)
 7. goals_log_progress(goalId, goalTitle, incrementValue, note)
+8. tasks_delete(taskId, title)
+   - Deletes an existing task by task ID or fuzzy title match.
+9. schedule_delete_block(blockId, title)
+   - Deletes an existing schedule routine block by ID or title.
 
 Tool Invocation Syntax:
 Whenever you execute or stage an action, include a fenced \`\`\`tool_call block in your response:
@@ -1123,7 +1127,10 @@ router.post('/chat', protect, aiLimiter, async (req, res) => {
 
     // Clean up tool_call / json code blocks from displayed content so chat looks clean
     let cleanContent = fullAssistantResponse
-      .replace(/```(?:tool_call|json)[\s\S]*?(?:```|$)/gi, '')
+      .replace(/```(?:tool_call|tool-call|tool_calls|json)[\s\S]*?(?:```|$)/gi, '')
+      .replace(/```[a-zA-Z0-9_-]*\s*\{[\s\S]*?"(?:name|tool_name|action|tool)"\s*:[\s\S]*?(?:```|$)/gi, '')
+      .replace(/\{[\s\r\n]*"(?:name|tool_name|tool)"\s*:\s*"[^"]*"[\s\r\n]*,[\s\r\n]*"(?:arguments|args|parameters)"\s*:\s*\{[\s\S]*?\}[\s\r\n]*\}/gi, '')
+      .replace(/<tool_call>[\s\S]*?(?:<\/tool_call>|$)/gi, '')
       .replace(/####\s*📅\s*Weekly Schedule[^\n]*/gi, '')
       .trim();
 
