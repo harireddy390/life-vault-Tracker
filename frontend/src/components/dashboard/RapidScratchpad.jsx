@@ -4,10 +4,21 @@ import taskService from '../../services/taskService';
 import noteService from '../../services/noteService';
 import './RapidScratchpad.css';
 
-const LS_KEY = 'lv_scratchpad';
+function getUserId() {
+  try {
+    const raw = localStorage.getItem('lifevault_user');
+    if (!raw) return 'anon';
+    const u = JSON.parse(raw);
+    return u?._id || u?.id || 'anon';
+  } catch {
+    return 'anon';
+  }
+}
+
+const getScratchpadKey = () => `lv_scratchpad_${getUserId()}`;
 
 function load() {
-  return localStorage.getItem(LS_KEY) || '';
+  return localStorage.getItem(getScratchpadKey()) || '';
 }
 
 export default function RapidScratchpad({ onTaskAdded }) {
@@ -23,7 +34,7 @@ export default function RapidScratchpad({ onTaskAdded }) {
     setText(val);
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      localStorage.setItem(LS_KEY, val);
+      localStorage.setItem(getScratchpadKey(), val);
     }, 300);
   };
 
@@ -76,7 +87,7 @@ export default function RapidScratchpad({ onTaskAdded }) {
   const handleClear = () => {
     if (!clearing) { setClearing(true); flash('Click Clear again to confirm'); return; }
     setText('');
-    localStorage.removeItem(LS_KEY);
+    localStorage.removeItem(getScratchpadKey());
     setClearing(false);
     setFeedback('');
   };

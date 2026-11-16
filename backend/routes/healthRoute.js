@@ -19,6 +19,7 @@ const EmergencyContact = require('../models/EmergencyContact');
 const Medication = require('../models/Medication');
 const VitalsLog = require('../models/VitalsLog');
 const HealthRecord = require('../models/HealthRecord');
+const HealthMetric = require('../models/HealthMetric');
 
 // ─────────────────────────────────────────────
 // Health-record upload directory (GridFS memoryStorage)
@@ -380,6 +381,238 @@ router.delete('/records/:id', protect, async (req, res) => {
 
     await record.deleteOne();
     res.json({ message: 'Health record deleted.' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────
+// ZONE 5 — Comprehensive Daily Health Metrics & Telemetry
+// ─────────────────────────────────────────────
+
+// GET /api/health/daily/:date — Fetch or generate day's metrics
+router.get('/daily/:date', protect, async (req, res) => {
+  try {
+    const { date } = req.params;
+    let metric = await HealthMetric.findOne({ user: req.user.id, date });
+
+    // If no daily document exists yet, pull prescribed medications to prepopulate today's checklist
+    if (!metric) {
+      const activeMeds = await Medication.find({ user: req.user.id });
+      const initialMeds = activeMeds.map((m) => ({
+        medId: m._id.toString(),
+        name: m.name,
+        dosage: m.dosage,
+        scheduledTime: m.frequency || 'Daily',
+        taken: false,
+        takenAt: null,
+      }));
+
+      metric = {
+        date,
+        weight: null,
+        water: 0,
+        sleep: 0,
+        restingHeartRate: null,
+        calories: 0,
+        meds: initialMeds,
+        workouts: [],
+        notes: '',
+      };
+    }
+
+    res.json(metric);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PUT /api/health/daily/:date — Upsert daily metrics
+router.put('/daily/:date', protect, async (req, res) => {
+  try {
+    const { date } = req.params;
+    const { weight, water, sleep, restingHeartRate, calories, meds, workouts, notes } = req.body;
+
+    const updateFields = {};
+    if (weight !== undefined) updateFields.weight = weight === '' || weight === null ? null : Number(weight);
+    if (water !== undefined) updateFields.water = Math.max(0, Number(water) || 0);
+    if (sleep !== undefined) updateFields.sleep = Math.max(0, Number(sleep) || 0);
+    if (restingHeartRate !== undefined) updateFields.restingHeartRate = restingHeartRate === '' || restingHeartRate === null ? null : Number(restingHeartRate);
+    if (calories !== undefined) updateFields.calories = Math.max(0, Number(calories) || 0);
+    if (Array.isArray(meds)) updateFields.meds = meds;
+    if (Array.isArray(workouts)) updateFields.workouts = workouts;
+    if (notes !== undefined) updateFields.notes = String(notes || '').trim();
+
+    const metric = await HealthMetric.findOneAndUpdate(
+      { user: req.user.id, date },
+      { $set: updateFields },
+      { new: true, upsert: true, runValidators: true }
+    );
+
+    res.json(metric);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// GET /api/health/history — Returns chronological history for trend charts (7/14/30 days)
+router.get('/history', protect, async (req, res) => {
+  try {
+    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 14, 1), 90);
+    const metrics = await HealthMetric.find({ user: req.user.id })
+      .sort({ date: -1 })
+      .limit(days)
+      .lean();
+
+    // Return in chronological order (earliest to latest) for accurate charting
+    metrics.reverse();
+    res.json(metrics);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PATCH /api/health/daily/:date/water — Quick 1-tap water adjustment
+router.patch('/daily/:date/water', protect, async (req, res) => {
+  try {
+    const { date } = req.params;
+    const { delta, amount } = req.body;
+
+    let metric = await HealthMetric.findOne({ user: req.user.id, date });
+    let newWater = 0;
+
+    if (metric) {
+      if (amount !== undefined) {
+        newWater = Math.max(0, Number(amount) || 0);
+      } else {
+        newWater = Math.max(0, (metric.water || 0) + (Number(delta) || 1));
+      }
+      metric.water = newWater;
+      await metric.save();
+    } else {
+      newWater = amount !== undefined ? Math.max(0, Number(amount) || 0) : Math.max(0, Number(delta) || 1);
+      metric = await HealthMetric.create({
+        user: req.user.id,
+        date,
+        water: newWater,
+      });
+    }
+
+    res.json({ date, water: metric.water });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PATCH /api/health/daily/:date/meds/toggle — Toggle medication taken status & calculate streak
+router.patch('/daily/:date/meds/toggle', protect, async (req, res) => {
+  try {
+    const { date } = req.params;
+    const { name, taken, medId, dosage, scheduledTime } = req.body;
+
+    let metric = await HealthMetric.findOne({ user: req.user.id, date });
+    if (!metric) {
+      metric = await HealthMetric.create({
+        user: req.user.id,
+        date,
+        meds: [],
+      });
+    }
+
+    const existingIndex = metric.meds.findIndex(
+      (m) => (medId && m.medId === medId) || m.name.toLowerCase() === (name || '').toLowerCase()
+    );
+
+    const isTaken = taken !== undefined ? !!taken : true;
+
+    if (existingIndex >= 0) {
+      metric.meds[existingIndex].taken = isTaken;
+      metric.meds[existingIndex].takenAt = isTaken ? new Date() : null;
+    } else {
+      metric.meds.push({
+        medId: medId || '',
+        name: name || 'Medication',
+        dosage: dosage || '',
+        scheduledTime: scheduledTime || 'Daily',
+        taken: isTaken,
+        takenAt: isTaken ? new Date() : null,
+      });
+    }
+
+    await metric.save();
+
+    // Calculate streak: how many consecutive days prior has this med been taken?
+    const recentMetrics = await HealthMetric.find({
+      user: req.user.id,
+      date: { $lte: date },
+    })
+      .sort({ date: -1 })
+      .limit(30)
+      .lean();
+
+    let streak = 0;
+    for (const day of recentMetrics) {
+      const match = day.meds?.find(
+        (m) => (medId && m.medId === medId) || m.name.toLowerCase() === (name || '').toLowerCase()
+      );
+      if (match && match.taken) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+
+    res.json({ metric, streak });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/health/daily/:date/workout — Add workout session to today's log
+router.post('/daily/:date/workout', protect, async (req, res) => {
+  try {
+    const { date } = req.params;
+    const { workoutType, durationMinutes, exercises, notes } = req.body;
+
+    if (!workoutType) {
+      return res.status(400).json({ message: 'workoutType is required.' });
+    }
+
+    let metric = await HealthMetric.findOne({ user: req.user.id, date });
+    if (!metric) {
+      metric = await HealthMetric.create({
+        user: req.user.id,
+        date,
+        workouts: [],
+      });
+    }
+
+    metric.workouts.push({
+      workoutType: workoutType.trim(),
+      durationMinutes: Number(durationMinutes) || 45,
+      exercises: Array.isArray(exercises) ? exercises : [],
+      notes: (notes || '').trim(),
+      completed: true,
+      loggedAt: new Date(),
+    });
+
+    await metric.save();
+    res.status(201).json(metric);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// DELETE /api/health/daily/:date/workout/:workoutId — Remove workout session
+router.delete('/daily/:date/workout/:workoutId', protect, async (req, res) => {
+  try {
+    const { date, workoutId } = req.params;
+    const metric = await HealthMetric.findOne({ user: req.user.id, date });
+    if (!metric) return res.status(404).json({ message: 'Daily metric not found.' });
+
+    metric.workouts = metric.workouts.filter((w) => w._id.toString() !== workoutId);
+    await metric.save();
+    res.json(metric);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

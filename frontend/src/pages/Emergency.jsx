@@ -1,120 +1,179 @@
-import { useEffect, useState } from 'react';
-import emergencyService from '../services/emergencyService';
+import React, { useState, useEffect } from 'react';
 import Toast from '../components/Toast';
+import emergencyService from '../services/emergencyService';
+import EmergencySOSModal from '../components/emergency/EmergencySOSModal';
+import MedicalIDCard from '../components/emergency/MedicalIDCard';
+import ICEContactsDirectory from '../components/emergency/ICEContactsDirectory';
+import EmergencyVaultLink from '../components/emergency/EmergencyVaultLink';
+import { AlertTriangle, ShieldAlert, PhoneCall } from 'lucide-react';
 import './Emergency.css';
 
 export default function Emergency() {
-  const [profile, setProfile] = useState(null);
+  const [profile, setProfile] = useState({
+    bloodGroup: '',
+    allergies: '',
+    chronicConditions: '',
+    currentMedications: '',
+    organDonor: true,
+    insuranceProvider: '',
+    insurancePolicyNumber: '',
+    hospitalPreference: '',
+    medicalNotes: '',
+    contacts: [],
+  });
+
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ bloodGroup: '', allergies: '', medicalNotes: '' });
-  const [contactForm, setContactForm] = useState({ name: '', relation: '', phone: '' });
-
-  useEffect(() => { load(); }, []);
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      const data = await emergencyService.getProfile();
-      setProfile(data);
-      setForm({ bloodGroup: data.bloodGroup || '', allergies: data.allergies || '', medicalNotes: data.medicalNotes || '' });
-    } catch { showToast('Could not load emergency profile.', 'error'); }
-    finally { setLoading(false); }
-  };
+  const [isSOSOpen, setIsSOSOpen] = useState(false);
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 2500);
+    setTimeout(() => setToast(null), 3000);
   };
 
-  const saveDetails = async (e) => {
-    e.preventDefault();
+  const loadProfile = async () => {
     try {
-      const updated = await emergencyService.updateProfile({ ...form, contacts: profile.contacts });
+      setLoading(true);
+      const data = await emergencyService.getProfile((revalidated) => {
+        if (revalidated) setProfile(revalidated);
+      });
+      if (data) setProfile(data);
+    } catch (err) {
+      console.warn('Could not load emergency profile:', err.message);
+      showToast('Offline mode: Using cached emergency data.', 'info');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  const handleUpdateMedicalID = async (formUpdates) => {
+    try {
+      const payload = {
+        ...profile,
+        ...formUpdates,
+      };
+      const updated = await emergencyService.updateProfile(payload);
       setProfile(updated);
-      setEditing(false);
-      showToast('Emergency info saved.');
-    } catch { showToast('Could not save.', 'error'); }
+      showToast('Medical ID details updated successfully.');
+    } catch (err) {
+      showToast('Failed to save Medical ID.', 'error');
+    }
   };
 
-  const addContact = async (e) => {
-    e.preventDefault();
-    if (!contactForm.name.trim() || !contactForm.phone.trim()) return;
-    const contacts = [...(profile.contacts || []), contactForm];
-    const updated = await emergencyService.updateProfile({ ...form, contacts });
-    setProfile(updated);
-    setContactForm({ name: '', relation: '', phone: '' });
+  const handleAddContact = async (newContact) => {
+    try {
+      const currentContacts = profile.contacts || [];
+      // If marked primary, unmark others
+      const sanitized = newContact.isPrimary
+        ? currentContacts.map((c) => ({ ...c, isPrimary: false }))
+        : currentContacts;
+
+      const updatedContacts = [...sanitized, newContact];
+      const updated = await emergencyService.updateProfile({
+        ...profile,
+        contacts: updatedContacts,
+      });
+      setProfile(updated);
+      showToast(`Emergency contact "${newContact.name}" added.`);
+    } catch (err) {
+      showToast('Failed to add emergency contact.', 'error');
+    }
   };
 
-  const removeContact = async (idx) => {
-    const contacts = profile.contacts.filter((_, i) => i !== idx);
-    const updated = await emergencyService.updateProfile({ ...form, contacts });
-    setProfile(updated);
+  const handleRemoveContact = async (idx) => {
+    try {
+      const updatedContacts = (profile.contacts || []).filter((_, i) => i !== idx);
+      const updated = await emergencyService.updateProfile({
+        ...profile,
+        contacts: updatedContacts,
+      });
+      setProfile(updated);
+      showToast('Contact removed from emergency directory.');
+    } catch (err) {
+      showToast('Failed to delete contact.', 'error');
+    }
   };
 
-  if (loading) return <div className="panel-loading"><span className="spinner"></span> Loading…</div>;
+  const handleSetPrimary = async (idx) => {
+    try {
+      const updatedContacts = (profile.contacts || []).map((c, i) => ({
+        ...c,
+        isPrimary: i === idx,
+      }));
+      const updated = await emergencyService.updateProfile({
+        ...profile,
+        contacts: updatedContacts,
+      });
+      setProfile(updated);
+      showToast('Primary emergency contact updated.');
+    } catch (err) {
+      showToast('Failed to set primary contact.', 'error');
+    }
+  };
 
   return (
-    <div className="emergency-page">
+    <div className="emergency-page space-y-6 max-w-6xl mx-auto px-4 sm:px-6 py-4">
       <Toast message={toast?.message} type={toast?.type} />
-      <div className="page-header">
-        <h1>Emergency</h1>
-        <p className="page-subtitle">Fast access to what matters most in a crisis.</p>
-      </div>
 
-      <div className="card emergency-banner">
-        <h2>In Case of Emergency</h2>
-        <p>Quick access to important information</p>
-      </div>
-
-      <div className="emergency-grid">
-        <div className="card panel">
-          <div className="panel-top-row">
-            <p className="panel-eyebrow">Medical Information</p>
-            <button className="btn btn-ghost small-btn" onClick={() => setEditing((v) => !v)}>{editing ? 'Cancel' : 'Edit'}</button>
+      {/* Page Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-slate-200">
+        <div>
+          <div className="flex items-center gap-2.5 mb-1 flex-wrap">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+              Emergency & SOS Center
+            </h1>
+            <span className="px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-700 text-xs font-bold border border-rose-200 flex items-center gap-1.5">
+              <ShieldAlert className="w-3.5 h-3.5" />
+              <span>Offline Ready • 0ms Retrieval</span>
+            </span>
           </div>
-          {editing ? (
-            <form className="emergency-form" onSubmit={saveDetails}>
-              <input className="input" placeholder="Blood group (e.g. O+ve)" value={form.bloodGroup} onChange={(e) => setForm({ ...form, bloodGroup: e.target.value })} />
-              <input className="input" placeholder="Allergies" value={form.allergies} onChange={(e) => setForm({ ...form, allergies: e.target.value })} />
-              <textarea className="input" rows={3} placeholder="Other medical notes" value={form.medicalNotes} onChange={(e) => setForm({ ...form, medicalNotes: e.target.value })} />
-              <button className="btn btn-primary" type="submit">Save</button>
-            </form>
-          ) : (
-            <div className="medical-info">
-              <div className="medical-row"><span>Blood Group</span><strong>{profile.bloodGroup || '—'}</strong></div>
-              <div className="medical-row"><span>Allergies</span><strong>{profile.allergies || '—'}</strong></div>
-              <div className="medical-row"><span>Notes</span><strong>{profile.medicalNotes || '—'}</strong></div>
-            </div>
-          )}
+          <p className="text-sm text-slate-500">
+            Rapid medical response telemetry, In-Case-of-Emergency (ICE) speed dial, and panic broadcast.
+          </p>
         </div>
 
-        <div className="card panel">
-          <p className="panel-eyebrow">Emergency Contacts</p>
-          {profile.contacts?.length === 0 ? (
-            <div className="empty-state"><p>No contacts added yet.</p></div>
-          ) : (
-            <ul className="contact-list">
-              {profile.contacts.map((c, i) => (
-                <li key={i} className="contact-row">
-                  <div>
-                    <p className="contact-name">{c.name} <span className="contact-relation">{c.relation}</span></p>
-                    <p className="contact-phone">{c.phone}</p>
-                  </div>
-                  <button className="btn-danger" onClick={() => removeContact(i)}>Remove</button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <form className="contact-form" onSubmit={addContact}>
-            <input className="input" placeholder="Name" value={contactForm.name} onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })} />
-            <input className="input" placeholder="Relation" value={contactForm.relation} onChange={(e) => setContactForm({ ...contactForm, relation: e.target.value })} />
-            <input className="input" placeholder="Phone" value={contactForm.phone} onChange={(e) => setContactForm({ ...contactForm, phone: e.target.value })} />
-            <button className="btn btn-secondary" type="submit">+ Add Contact</button>
-          </form>
-        </div>
+        {/* SOS Action Button */}
+        <button
+          type="button"
+          onClick={() => setIsSOSOpen(true)}
+          className="inline-flex items-center gap-2.5 px-6 py-3 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 text-white font-black text-sm rounded-2xl shadow-lg shadow-rose-600/25 transition-all transform active:scale-95 shrink-0 self-start md:self-auto border border-rose-500"
+        >
+          <PhoneCall className="w-5 h-5 animate-bounce" />
+          <span>TRIGGER EMERGENCY SOS</span>
+        </button>
       </div>
+
+      {/* SECTION 1: Medical ID (First Responder View) */}
+      <section aria-label="Medical ID">
+        <MedicalIDCard profile={profile} onUpdateProfile={handleUpdateMedicalID} />
+      </section>
+
+      {/* SECTION 2: ICE Contacts Directory with 1-Tap Call & SMS */}
+      <section aria-label="Emergency Contacts">
+        <ICEContactsDirectory
+          contacts={profile.contacts || []}
+          onAddContact={handleAddContact}
+          onRemoveContact={handleRemoveContact}
+          onSetPrimary={handleSetPrimary}
+        />
+      </section>
+
+      {/* SECTION 3: Encrypted Vault Shortcut */}
+      <section aria-label="Encrypted Vault Documents">
+        <EmergencyVaultLink />
+      </section>
+
+      {/* Emergency SOS Modal */}
+      <EmergencySOSModal
+        isOpen={isSOSOpen}
+        onClose={() => setIsSOSOpen(false)}
+        profile={profile}
+        contacts={profile.contacts || []}
+      />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { Analytics } from '@vercel/analytics/react';
 import AppLayout from './layouts/AppLayout';
 import PrivateRoute from './components/PrivateRoute';
+import ErrorBoundary from './components/common/ErrorBoundary';
 
 // Auth Pages (Code-split)
 const Login = lazy(() => import('./pages/Login'));
@@ -27,7 +28,7 @@ const Settings = lazy(() => import('./pages/Settings'));
 
 function App() {
   return (
-    <>
+    <ErrorBoundary>
       <Suspense fallback={null}>
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -65,7 +66,7 @@ function App() {
         </Routes>
       </Suspense>
       <Analytics />
-    </>
+    </ErrorBoundary>
   );
 }
 

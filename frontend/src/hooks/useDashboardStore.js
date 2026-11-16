@@ -6,7 +6,18 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 
-const STORAGE_KEY = 'life_vault_dashboard_v1';
+function getUserId() {
+  try {
+    const raw = localStorage.getItem('lifevault_user');
+    if (!raw) return 'anon';
+    const u = JSON.parse(raw);
+    return u?._id || u?.id || 'anon';
+  } catch {
+    return 'anon';
+  }
+}
+
+const getStorageKey = () => `life_vault_dashboard_${getUserId()}_v1`;
 
 const todayKey = () => new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
@@ -24,7 +35,7 @@ const DEFAULT_STATE = {
 
 function load() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getStorageKey());
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     // Reset per-day fields if date has changed
@@ -45,7 +56,7 @@ function load() {
 
 function save(state) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, date: todayKey() }));
+    localStorage.setItem(getStorageKey(), JSON.stringify({ ...state, date: todayKey() }));
   } catch { /* storage full — ignore */ }
 }
 

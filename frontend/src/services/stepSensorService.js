@@ -23,7 +23,18 @@ import stepService from './stepService';
 import nativeStepBridge from './nativeStepBridge';
 import { get as idbGet, set as idbSet } from 'idb-keyval';
 
-const SENSOR_STORAGE_KEY_PREFIX = 'lifevault_sensor_steps_';
+function getStepUserId() {
+  try {
+    const raw = localStorage.getItem('lifevault_user');
+    if (!raw) return 'anon';
+    const u = JSON.parse(raw);
+    return u?._id || u?.id || 'anon';
+  } catch {
+    return 'anon';
+  }
+}
+
+const getStepStorageKey = (today) => `lifevault_sensor_steps_${getStepUserId()}_${today}`;
 const SENSOR_ENABLED_KEY = 'lifevault_sensor_tracking_enabled';
 
 // Physical signal processing thresholds (for browser fallback)
@@ -236,7 +247,7 @@ class StepSensorService {
    * Restores stored sensor steps for today from localStorage and IndexedDB (taking highest valid)
    */
   async restorePersistedCount() {
-    const key = `${SENSOR_STORAGE_KEY_PREFIX}${this.today}`;
+    const key = getStepStorageKey(this.today);
     let highestCount = 0;
 
     // 1. Check synchronous localStorage
@@ -265,7 +276,7 @@ class StepSensorService {
    * Persists current sensor steps to both localStorage and IndexedDB and notifies Service Worker
    */
   async savePersistedCount() {
-    const key = `${SENSOR_STORAGE_KEY_PREFIX}${this.today}`;
+    const key = getStepStorageKey(this.today);
     try {
       localStorage.setItem(key, String(this.sensorSteps));
     } catch {}
@@ -616,7 +627,7 @@ class StepSensorService {
     this.lastPeakTimestamp = 0;
 
     // 1. Immediately reset localStorage
-    const key = `${SENSOR_STORAGE_KEY_PREFIX}${this.today}`;
+    const key = getStepStorageKey(this.today);
     try {
       localStorage.setItem(key, '0');
     } catch {}

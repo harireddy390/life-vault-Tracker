@@ -152,9 +152,9 @@ export default function AppLayout({ children }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (window.confirm('Log out of Life Vault?')) {
-      authService.logout();
+      await authService.logout();
       navigate('/login');
     }
   };

@@ -12,13 +12,24 @@
  * fully route-independent while staying compatible with any component.
  */
 
-const LS_KEY = 'life_vault_timer';
+function getUserId() {
+  try {
+    const raw = localStorage.getItem('lifevault_user');
+    if (!raw) return 'anon';
+    const u = JSON.parse(raw);
+    return u?._id || u?.id || 'anon';
+  } catch {
+    return 'anon';
+  }
+}
+
+const getTimerStorageKey = () => `life_vault_timer_${getUserId()}`;
 
 // ─── Canonical state ────────────────────────────────────────────────────────
 
 function loadState() {
   try {
-    const raw = localStorage.getItem(LS_KEY);
+    const raw = localStorage.getItem(getTimerStorageKey());
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -27,7 +38,7 @@ function loadState() {
 
 function saveState(s) {
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify(s));
+    localStorage.setItem(getTimerStorageKey(), JSON.stringify(s));
   } catch { /* storage full */ }
 }
 

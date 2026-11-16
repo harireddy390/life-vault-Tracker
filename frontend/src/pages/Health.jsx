@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Toast from '../components/Toast';
+import { formatDateKey } from '../utils/dateUtils';
 import './Health.css';
 
 // Health API Services
@@ -10,9 +11,20 @@ import {
   getRecords,
   deleteMedication,
   deleteRecord,
+  getDailyHealthMetric,
+  saveDailyHealthMetric,
+  getHealthMetricsHistory,
+  quickUpdateWater,
+  toggleMedTaken,
+  logWorkout,
+  deleteWorkout,
 } from '../services/healthService';
 
-// Zone Components
+// Zone & Health Components
+import DailyBiometricsCard from '../components/health/DailyBiometricsCard';
+import HealthTrendChart from '../components/health/HealthTrendChart';
+import MedicationScheduleTracker from '../components/health/MedicationScheduleTracker';
+import WorkoutActivityLogger from '../components/health/WorkoutActivityLogger';
 import MedicalIDBanner from '../components/health/MedicalIDBanner';
 import VitalsGrid from '../components/health/VitalsGrid';
 import MedicationsPanel from '../components/health/MedicationsPanel';
@@ -28,14 +40,12 @@ import ConfirmDeleteModal from '../components/health/modals/ConfirmDeleteModal';
 // Icons
 import {
   HeartPulse,
-  Sparkles,
-  ChevronDown,
-  ChevronUp,
+  Activity,
+  Pill,
+  Dumbbell,
+  FileText,
   ShieldCheck,
 } from 'lucide-react';
-
-const TOTAL_GLASSES = 8;
-const POSTURE_INTERVAL_MIN = 30;
 
 export default function Health() {
   // ── Toast State ──
@@ -44,6 +54,29 @@ export default function Health() {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
+
+  // ── Active Tab ──
+  // 'biometrics' | 'medications' | 'workouts' | 'clinical'
+  const [activeTab, setActiveTab] = useState('biometrics');
+
+  // ── Selected Date for Daily Tracking ──
+  const [selectedDate, setSelectedDate] = useState(() => formatDateKey(new Date()));
+
+  // ── Daily Health Metric State ──
+  const [dailyMetric, setDailyMetric] = useState({
+    date: selectedDate,
+    weight: null,
+    water: 0,
+    sleep: 0,
+    restingHeartRate: null,
+    calories: 0,
+    meds: [],
+    workouts: [],
+    notes: '',
+  });
+
+  // ── Biometric Trend History (14 days) ──
+  const [history, setHistory] = useState([]);
 
   // ── Clinical Health States ──
   const [loading, setLoading] = useState(true);
@@ -64,38 +97,39 @@ export default function Health() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
-  // ── Preserved Wellness Widgets State ──
-  const [showWellness, setShowWellness] = useState(false);
-  const [waterCount, setWaterCount] = useState(Number(localStorage.getItem('lv_water_count')) || 0);
-  const [sleepHrs, setSleepHrs] = useState(Number(localStorage.getItem('lv_sleep_hrs')) || 0);
-  const [sleepInput, setSleepInput] = useState('');
+  // ── Load Daily Metric whenever selectedDate changes ──
+  const loadDailyData = async (date) => {
+    try {
+      const data = await getDailyHealthMetric(date, (revalidated) => {
+        setDailyMetric(revalidated);
+      });
+      if (data) setDailyMetric(data);
+    } catch (err) {
+      console.warn('Could not load daily health metric:', err.message);
+    }
+  };
 
-  const [postureSecondsLeft, setPostureSecondsLeft] = useState(POSTURE_INTERVAL_MIN * 60);
-  const [postureRunning, setPostureRunning] = useState(false);
-  const intervalRef = useRef(null);
-  const audioCtxRef = useRef(null);
+  // ── Load History for Trend Charts ──
+  const loadHistory = async () => {
+    try {
+      const data = await getHealthMetricsHistory(14, (revalidated) => {
+        setHistory(revalidated || []);
+      });
+      if (data) setHistory(data);
+    } catch (err) {
+      console.warn('Could not load health history:', err.message);
+    }
+  };
 
-  // ── Fetch Health Data ──
-  const loadAllHealthData = async () => {
+  // ── Load Clinical & Profile Data ──
+  const loadClinicalData = async () => {
     try {
       setLoading(true);
       const [emergencyRes, vitalsRes, medsRes, recordsRes] = await Promise.all([
-        getEmergencyProfile().catch((err) => {
-          console.error('Failed to load emergency profile:', err);
-          return { profile: null, contacts: [] };
-        }),
-        getVitals().catch((err) => {
-          console.error('Failed to load vitals:', err);
-          return { latest: {}, history: [] };
-        }),
-        getMedications().catch((err) => {
-          console.error('Failed to load medications:', err);
-          return [];
-        }),
-        getRecords({ category: activeCategory, search: searchQuery }).catch((err) => {
-          console.error('Failed to load records:', err);
-          return [];
-        }),
+        getEmergencyProfile().catch(() => ({ profile: null, contacts: [] })),
+        getVitals().catch(() => ({ latest: {}, history: [] })),
+        getMedications().catch(() => []),
+        getRecords({ category: activeCategory, search: searchQuery }).catch(() => []),
       ]);
 
       setEmergencyData(emergencyRes || { profile: null, contacts: [] });
@@ -103,31 +137,78 @@ export default function Health() {
       setMedications(medsRes || []);
       setRecords(recordsRes || []);
     } catch (err) {
-      console.error('Error fetching health dashboard data:', err);
-      showToast('Could not fetch all clinical data', 'error');
+      console.error('Error fetching health clinical data:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const loadRecords = async (category = activeCategory, search = searchQuery) => {
+  useEffect(() => {
+    loadDailyData(selectedDate);
+  }, [selectedDate]);
+
+  useEffect(() => {
+    loadHistory();
+    loadClinicalData();
+  }, []);
+
+  // ── Handlers for Daily Biometrics ──
+  const handleSaveDailyMetric = async (updates) => {
     try {
-      const data = await getRecords({ category, search });
-      setRecords(data || []);
+      const updated = await saveDailyHealthMetric(selectedDate, updates);
+      setDailyMetric(updated);
+      await loadHistory();
+      showToast('Daily biometrics saved successfully.');
     } catch (err) {
-      console.error('Failed to filter records:', err);
+      showToast('Failed to save biometrics.', 'error');
     }
   };
 
-  useEffect(() => {
-    loadAllHealthData();
-  }, []);
+  const handleWaterChange = async (delta) => {
+    try {
+      const updated = await quickUpdateWater(selectedDate, { delta });
+      setDailyMetric((prev) => ({ ...prev, water: updated.water }));
+      loadHistory();
+    } catch (err) {
+      showToast('Failed to update hydration.', 'error');
+    }
+  };
 
-  useEffect(() => {
-    loadRecords(activeCategory, searchQuery);
-  }, [activeCategory, searchQuery]);
+  const handleToggleMed = async (medPayload) => {
+    try {
+      const res = await toggleMedTaken(selectedDate, medPayload);
+      if (res.metric) {
+        setDailyMetric(res.metric);
+      }
+      showToast(
+        medPayload.taken ? 'Dose marked as taken! Streak updated 🔥' : 'Dose marked as pending.'
+      );
+    } catch (err) {
+      showToast('Could not update medication schedule.', 'error');
+    }
+  };
 
-  // ── Delete Handler ──
+  const handleLogWorkout = async (workoutData) => {
+    try {
+      const updated = await logWorkout(selectedDate, workoutData);
+      setDailyMetric(updated);
+      showToast('Workout session logged successfully! 🏋️');
+    } catch (err) {
+      showToast('Could not log workout.', 'error');
+    }
+  };
+
+  const handleDeleteWorkout = async (workoutId) => {
+    try {
+      const updated = await deleteWorkout(selectedDate, workoutId);
+      setDailyMetric(updated);
+      showToast('Workout removed from today’s log.');
+    } catch (err) {
+      showToast('Could not delete workout.', 'error');
+    }
+  };
+
+  // ── Delete Handler for Clinical Items ──
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -150,87 +231,16 @@ export default function Health() {
     }
   };
 
-  // ── Wellness Timer & Audio ──
-  const ensureAudioContext = () => {
-    if (!audioCtxRef.current) {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      if (Ctx) audioCtxRef.current = new Ctx();
-    }
-    if (audioCtxRef.current?.state === 'suspended') {
-      audioCtxRef.current.resume();
-    }
-  };
-
-  const playPostureChime = () => {
-    const ctx = audioCtxRef.current;
-    if (!ctx) return;
-    const playTone = (freq, startTime, duration) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.0001, startTime);
-      gain.gain.exponentialRampToValueAtTime(0.18, startTime + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(startTime);
-      osc.stop(startTime + duration);
-    };
-    const now = ctx.currentTime;
-    playTone(784, now, 0.35);
-    playTone(1047, now + 0.18, 0.4);
-  };
-
-  useEffect(() => {
-    if (!postureRunning) return;
-    intervalRef.current = setInterval(() => {
-      setPostureSecondsLeft((s) => s - 1);
-    }, 1000);
-    return () => clearInterval(intervalRef.current);
-  }, [postureRunning]);
-
-  useEffect(() => {
-    if (postureSecondsLeft > 0) return;
-    playPostureChime();
-    showToast('Time to stand up and stretch! 🧘', 'info');
-    setPostureSecondsLeft(POSTURE_INTERVAL_MIN * 60);
-  }, [postureSecondsLeft]);
-
-  const addWater = (count) => {
-    setWaterCount(count);
-    localStorage.setItem('lv_water_count', count);
-  };
-  const resetWater = () => addWater(0);
-
-  const saveSleep = (e) => {
-    e.preventDefault();
-    if (!sleepInput) return;
-    const n = Number(sleepInput);
-    setSleepHrs(n);
-    localStorage.setItem('lv_sleep_hrs', n);
-    setSleepInput('');
-    showToast('Sleep logged.');
-  };
-
-  const formatTime = (s) => {
-    const m = Math.floor(s / 60).toString().padStart(2, '0');
-    const sec = (s % 60).toString().padStart(2, '0');
-    return `${m}:${sec}`;
-  };
-
-  const hydrationPct = Math.round((waterCount / TOTAL_GLASSES) * 100);
-
   return (
-    <div className="health-page space-y-6">
+    <div className="health-page space-y-6 max-w-7xl mx-auto px-4 sm:px-6 py-4">
       <Toast message={toast?.message} type={toast?.type} />
 
-      {/* ── Page Header (Exact match to Vault Header Row) ── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-slate-200">
+      {/* Page Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
           <div className="flex items-center gap-2.5 mb-1 flex-wrap">
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              Medical & Health Hub
+              Health & Vitals Hub
             </h1>
             <span className="vault-badge-encrypted">
               <ShieldCheck className="w-3.5 h-3.5" />
@@ -238,235 +248,218 @@ export default function Health() {
             </span>
           </div>
           <p className="text-sm text-slate-500">
-            Intelligent medical profile, vitals tracking with clinical benchmarks, active prescriptions, and encrypted diagnostic repository.
+            Comprehensive daily biometrics, trend analytics, medication adherence, gym logging, and diagnostic records.
           </p>
         </div>
 
-        {/* Header Actions */}
-        <div className="flex items-center gap-2.5 self-start md:self-center">
+        {/* Navigation Tabs */}
+        <div className="flex items-center gap-1 bg-slate-100 p-1.5 rounded-2xl overflow-x-auto self-start md:self-auto shadow-inner">
           <button
-            onClick={() => setShowWellness((prev) => !prev)}
-            className="vault-btn-ghost text-xs py-2 px-3 flex items-center gap-1.5"
+            type="button"
+            onClick={() => setActiveTab('biometrics')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeTab === 'biometrics'
+                ? 'bg-white text-indigo-700 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
           >
-            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-            <span>{showWellness ? 'Hide Daily Habits' : 'Daily Wellness Habits'}</span>
-            {showWellness ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            <Activity className="w-4 h-4 text-indigo-600" />
+            <span>Biometrics & Trends</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('medications')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeTab === 'medications'
+                ? 'bg-white text-purple-700 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Pill className="w-4 h-4 text-purple-600" />
+            <span>Meds & Supplements</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('workouts')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeTab === 'workouts'
+                ? 'bg-white text-orange-700 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Dumbbell className="w-4 h-4 text-orange-600" />
+            <span>Workout & Activity</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('clinical')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeTab === 'clinical'
+                ? 'bg-white text-rose-700 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <HeartPulse className="w-4 h-4 text-rose-600" />
+            <span>Clinical Records</span>
           </button>
         </div>
       </div>
 
-      {/* ZONE 1: Emergency Medical ID & Responders */}
-      <section aria-label="Emergency Profile">
-        <MedicalIDBanner
-          profile={emergencyData.profile}
-          contacts={emergencyData.contacts}
-          onOpenEdit={() => setIsMedicalIDOpen(true)}
-        />
-      </section>
+      {/* TAB 1: Biometrics & Trend Analysis */}
+      {activeTab === 'biometrics' && (
+        <div className="space-y-6">
+          <DailyBiometricsCard
+            date={selectedDate}
+            metric={dailyMetric}
+            onDateChange={setSelectedDate}
+            onSaveMetric={handleSaveDailyMetric}
+            onWaterChange={handleWaterChange}
+          />
 
-      {/* ZONE 2: Biometric Vitals Stream with Adult Targets */}
-      <section aria-label="Biometrics Stream">
-        <VitalsGrid
-          vitalsData={vitalsData}
-          onOpenLogModal={() => setIsLogVitalOpen(true)}
-        />
-      </section>
-
-      {/* ZONE 3: Active Medications Regimen */}
-      <section aria-label="Medications Regimen">
-        <MedicationsPanel
-          medications={medications}
-          onOpenAddModal={() => setIsAddMedOpen(true)}
-          onDeleteClick={(med) =>
-            setDeleteTarget({
-              type: 'med',
-              item: med,
-              title: `Delete ${med.name}?`,
-              message: `Are you sure you want to delete ${med.name} (${med.dosage}) from your active medication regimen?`,
-            })
-          }
-          onMedicationUpdated={async () => {
-            const data = await getMedications();
-            setMedications(data || []);
-            showToast('Dose logged successfully');
-          }}
-        />
-      </section>
-
-      {/* ZONE 4: Clinical Diagnostic Vault */}
-      <section aria-label="Health Documents">
-        <HealthRecords
-          records={records}
-          activeCategory={activeCategory}
-          onCategoryChange={setActiveCategory}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          onOpenUploadModal={() => setIsUploadRecordOpen(true)}
-          onDeleteClick={(record) =>
-            setDeleteTarget({
-              type: 'record',
-              item: record,
-              title: `Delete ${record.title}?`,
-              message: `Are you sure you want to permanently delete the document "${record.originalName}"? The encrypted file will be purged.`,
-            })
-          }
-        />
-      </section>
-
-      {/* PRESERVED WELLNESS WIDGETS SECTION */}
-      {showWellness && (
-        <div className="wellness-section pt-4 space-y-4">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-indigo-600" />
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-              Daily Wellness & Posture Habits
-            </h3>
-          </div>
-
-          <div className="health-grid">
-            {/* Hydration Panel */}
-            <div className="h-card health-panel">
-              <p className="text-xs font-bold uppercase text-slate-500 tracking-wider mb-2">Daily Hydration</p>
-              <div className="hydration-ring-wrap">
-                <div
-                  className="hydration-ring"
-                  style={{
-                    background: `conic-gradient(#4f46e5 ${hydrationPct * 3.6}deg, #e2e8f0 0deg)`,
-                  }}
-                >
-                  <div className="hydration-ring-center">
-                    <span className="hydration-pct">{hydrationPct}%</span>
-                    <span className="hydration-label">
-                      {waterCount}/{TOTAL_GLASSES} glasses
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div className="water-drops-large">
-                {Array.from({ length: TOTAL_GLASSES }).map((_, i) => (
-                  <button
-                    key={i}
-                    className="water-drop-btn-lg"
-                    onClick={() => addWater(i + 1)}
-                    style={{ opacity: i < waterCount ? 1 : 0.25 }}
-                    aria-label={`Set water intake to ${i + 1} glasses`}
-                  >
-                    {'💧'}
-                  </button>
-                ))}
-              </div>
-              <button className="vault-btn-ghost w-full text-xs" onClick={resetWater}>
-                Reset for the day
-              </button>
-            </div>
-
-            {/* Posture Check */}
-            <div className="h-card health-panel">
-              <p className="text-xs font-bold uppercase text-slate-500 tracking-wider mb-2">Posture Alert</p>
-              <p className="text-xs text-slate-500">Gentle chime every {POSTURE_INTERVAL_MIN} minutes to sit up and stretch.</p>
-              <div className="posture-timer">{formatTime(postureSecondsLeft)}</div>
-              <div className="flex items-center justify-center gap-2">
-                <button
-                  className="vault-btn-action text-xs"
-                  onClick={() => {
-                    ensureAudioContext();
-                    setPostureRunning(true);
-                  }}
-                  disabled={postureRunning}
-                >
-                  Start
-                </button>
-                <button
-                  className="vault-btn-ghost text-xs"
-                  onClick={() => setPostureRunning(false)}
-                  disabled={!postureRunning}
-                >
-                  Pause
-                </button>
-                <button
-                  className="vault-btn-ghost text-xs"
-                  onClick={() => {
-                    setPostureRunning(false);
-                    setPostureSecondsLeft(POSTURE_INTERVAL_MIN * 60);
-                  }}
-                >
-                  Reset
-                </button>
-              </div>
-            </div>
-
-            {/* Sleep Log */}
-            <div className="h-card health-panel">
-              <p className="text-xs font-bold uppercase text-slate-500 tracking-wider mb-2">Sleep Log</p>
-              <p className="health-log-value">{sleepHrs ? `${sleepHrs}h` : '—'}</p>
-              <form className="health-log-form flex gap-2" onSubmit={saveSleep}>
-                <input
-                  className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 flex-1"
-                  type="number"
-                  step="0.5"
-                  placeholder="Hours slept last night"
-                  value={sleepInput}
-                  onChange={(e) => setSleepInput(e.target.value)}
-                />
-                <button className="vault-btn-action text-xs shrink-0" type="submit">
-                  Save
-                </button>
-              </form>
-            </div>
-          </div>
+          <HealthTrendChart history={history} />
         </div>
       )}
 
-      {/* ── MODALS (High-contrast dark floating modals matching Vault UploadModal) ── */}
-      <MedicalIDModal
-        isOpen={isMedicalIDOpen}
-        profile={emergencyData.profile}
-        contacts={emergencyData.contacts}
-        onClose={() => setIsMedicalIDOpen(false)}
-        onSaved={async () => {
-          const data = await getEmergencyProfile();
-          setEmergencyData(data);
-          showToast('Medical Profile updated successfully');
-        }}
-      />
+      {/* TAB 2: Medications & Supplement Schedule */}
+      {activeTab === 'medications' && (
+        <div className="space-y-6">
+          <MedicationScheduleTracker
+            date={selectedDate}
+            meds={dailyMetric.meds || []}
+            onToggleMed={handleToggleMed}
+            onOpenAddMed={() => setIsAddMedOpen(true)}
+          />
 
-      <LogVitalModal
-        isOpen={isLogVitalOpen}
-        onClose={() => setIsLogVitalOpen(false)}
-        onVitalLogged={async () => {
-          const vitals = await getVitals();
-          setVitalsData(vitals);
-          showToast('Vital reading recorded');
-        }}
-      />
+          <MedicationsPanel
+            medications={medications}
+            onOpenAddModal={() => setIsAddMedOpen(true)}
+            onDeleteClick={(med) =>
+              setDeleteTarget({
+                type: 'med',
+                item: med,
+                title: `Delete ${med.name}?`,
+                message: `Are you sure you want to delete ${med.name} (${med.dosage}) from your active medication regimen?`,
+              })
+            }
+            onMedicationUpdated={async () => {
+              const data = await getMedications();
+              setMedications(data || []);
+              loadDailyData(selectedDate);
+              showToast('Dose updated successfully');
+            }}
+          />
+        </div>
+      )}
 
-      <AddMedicationModal
-        isOpen={isAddMedOpen}
-        onClose={() => setIsAddMedOpen(false)}
-        onMedicationAdded={async () => {
-          const meds = await getMedications();
-          setMedications(meds);
-          showToast('Medication added to regimen');
-        }}
-      />
+      {/* TAB 3: Workouts & Daily Movement */}
+      {activeTab === 'workouts' && (
+        <div className="space-y-6">
+          <WorkoutActivityLogger
+            date={selectedDate}
+            workouts={dailyMetric.workouts || []}
+            onLogWorkout={handleLogWorkout}
+            onDeleteWorkout={handleDeleteWorkout}
+          />
+        </div>
+      )}
 
-      <UploadRecordModal
-        isOpen={isUploadRecordOpen}
-        onClose={() => setIsUploadRecordOpen(false)}
-        onRecordUploaded={async () => {
-          await loadRecords();
-          showToast('Health document stored securely');
-        }}
-      />
+      {/* TAB 4: Clinical Diagnostics & Encrypted Records */}
+      {activeTab === 'clinical' && (
+        <div className="space-y-6">
+          <MedicalIDBanner
+            profile={emergencyData.profile}
+            contacts={emergencyData.contacts}
+            onOpenEdit={() => setIsMedicalIDOpen(true)}
+          />
 
-      <ConfirmDeleteModal
-        isOpen={!!deleteTarget}
-        title={deleteTarget?.title}
-        message={deleteTarget?.message}
-        confirming={deleting}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={handleConfirmDelete}
-      />
+          <VitalsGrid
+            vitalsData={vitalsData}
+            onOpenLogModal={() => setIsLogVitalOpen(true)}
+          />
+
+          <HealthRecords
+            records={records}
+            activeCategory={activeCategory}
+            onCategoryChange={setActiveCategory}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            onOpenUploadModal={() => setIsUploadRecordOpen(true)}
+            onDeleteClick={(record) =>
+              setDeleteTarget({
+                type: 'record',
+                item: record,
+                title: `Delete ${record.title}?`,
+                message: `Are you sure you want to permanently delete "${record.originalName}"?`,
+              })
+            }
+          />
+        </div>
+      )}
+
+      {/* ── Modals ── */}
+      {isMedicalIDOpen && (
+        <MedicalIDModal
+          isOpen={isMedicalIDOpen}
+          onClose={() => setIsMedicalIDOpen(false)}
+          profile={emergencyData.profile}
+          contacts={emergencyData.contacts}
+          onSuccess={(updated) => {
+            setEmergencyData((prev) => ({ ...prev, ...updated }));
+            showToast('Medical profile updated');
+          }}
+        />
+      )}
+
+      {isLogVitalOpen && (
+        <LogVitalModal
+          isOpen={isLogVitalOpen}
+          onClose={() => setIsLogVitalOpen(false)}
+          onSuccess={async () => {
+            const data = await getVitals();
+            setVitalsData(data || { latest: {}, history: [] });
+            showToast('Vital reading recorded');
+          }}
+        />
+      )}
+
+      {isAddMedOpen && (
+        <AddMedicationModal
+          isOpen={isAddMedOpen}
+          onClose={() => setIsAddMedOpen(false)}
+          onSuccess={async () => {
+            const data = await getMedications();
+            setMedications(data || []);
+            loadDailyData(selectedDate);
+            showToast('Medication added to regimen');
+          }}
+        />
+      )}
+
+      {isUploadRecordOpen && (
+        <UploadRecordModal
+          isOpen={isUploadRecordOpen}
+          onClose={() => setIsUploadRecordOpen(false)}
+          onSuccess={async () => {
+            const data = await getRecords({ category: activeCategory, search: searchQuery });
+            setRecords(data || []);
+            showToast('Diagnostic document uploaded to encrypted storage');
+          }}
+        />
+      )}
+
+      {deleteTarget && (
+        <ConfirmDeleteModal
+          isOpen={!!deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={handleConfirmDelete}
+          title={deleteTarget.title}
+          message={deleteTarget.message}
+          loading={deleting}
+        />
+      )}
     </div>
   );
 }

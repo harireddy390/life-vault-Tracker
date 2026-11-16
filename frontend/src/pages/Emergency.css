@@ -1,16 +1,17 @@
-/* find: */
+.emergency-page {
+  animation: page-fade-in 0.28s ease;
+  overflow-x: clip;
+}
+
 .emergency-banner {
   padding: var(--space-4) var(--space-5);
-  background: linear-gradient(135deg, rgba(249,82,108,0.18), rgba(249,82,108,0.06));
-  border-color: rgba(249,82,108,0.35);
+  background: linear-gradient(135deg, rgba(220, 38, 38, 0.1), rgba(220, 38, 38, 0.03));
+  border-color: rgba(220, 38, 38, 0.25);
   margin-bottom: var(--space-4);
 }
-.emergency-banner h2 { font-size: 17px; color: #fca5b5; margin-bottom: 4px; }
-/* replace with: */
-.emergency-banner {
-  padding: var(--space-4) var(--space-5);
-  background: linear-gradient(135deg, rgba(220,38,38,0.10), rgba(220,38,38,0.03));
-  border-color: rgba(220,38,38,0.25);
-  margin-bottom: var(--space-4);
+
+.emergency-banner h2 {
+  font-size: 17px;
+  color: var(--rose-600);
+  margin-bottom: 4px;
 }
-.emergency-banner h2 { font-size: 17px; color: var(--rose-600); margin-bottom: 4px; }
