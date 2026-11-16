@@ -11,7 +11,7 @@ const RECORD_CATEGORIES = [
   { value: 'other', label: 'Other Document' },
 ];
 
-export default function UploadRecordModal({ isOpen, onClose, onRecordUploaded }) {
+export default function UploadRecordModal({ isOpen, onClose, onRecordUploaded, onSuccess }) {
   const [file, setFile] = useState(null);
   const [dragActive, setDragActive] = useState(false);
   const [title, setTitle] = useState('');
@@ -43,8 +43,25 @@ export default function UploadRecordModal({ isOpen, onClose, onRecordUploaded })
 
   const handleFile = (chosenFile) => {
     if (!chosenFile) return;
-    const allowed = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
-    if (!allowed.includes(chosenFile.type)) {
+    const name = chosenFile.name || '';
+    const lastDot = name.lastIndexOf('.');
+    const ext = lastDot !== -1 ? name.slice(lastDot).toLowerCase() : '';
+    const allowedExts = ['.pdf', '.png', '.jpg', '.jpeg', '.webp'];
+    const allowedMimes = [
+      'application/pdf',
+      'application/x-pdf',
+      'image/png',
+      'image/jpeg',
+      'image/jpg',
+      'image/pjpeg',
+      'image/webp',
+      'application/octet-stream',
+    ];
+
+    const isExtValid = allowedExts.includes(ext);
+    const isMimeValid = !chosenFile.type || allowedMimes.includes(chosenFile.type);
+
+    if (!isExtValid && !isMimeValid) {
       setError('Invalid file type. Only PDF and image files (PNG, JPG, WEBP) are allowed.');
       return;
     }
@@ -102,7 +119,8 @@ export default function UploadRecordModal({ isOpen, onClose, onRecordUploaded })
 
     try {
       await uploadRecord(formData);
-      onRecordUploaded();
+      if (typeof onRecordUploaded === 'function') onRecordUploaded();
+      if (typeof onSuccess === 'function') onSuccess();
       onClose();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to upload health record.');

@@ -5,7 +5,7 @@ const fs = require('fs');
 const multer = require('multer');
 const { protect } = require('../middleware/authMiddleware');
 const { escapeRegex } = require('../utils/securityUtils');
-const { validateUploadMagicBytes } = require('../config/upload');
+const { upload, validateUploadMagicBytes } = require('../config/upload');
 
 const {
   uploadBufferToGridFS,
@@ -270,22 +270,31 @@ router.post('/vitals', protect, async (req, res) => {
 // ─────────────────────────────────────────────
 
 // POST /api/health/records/upload
-router.post('/records/upload', protect, healthUpload.single('file'), validateUploadMagicBytes, async (req, res) => {
+router.post('/records/upload', protect, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: 'No file uploaded.' });
     const { title, category, doctorOrFacility, recordDate } = req.body;
-    if (!title) return res.status(400).json({ message: 'title is required.' });
+    if (!title || !title.trim()) return res.status(400).json({ message: 'title is required.' });
 
-    const filename = req.file.filename;
+    const ext = path.extname(req.file.originalname || '').toLowerCase();
+    const filename = req.file.filename || `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext || '.bin'}`;
 
     await uploadBufferToGridFS(`health/${filename}`, req.file.buffer, {
-      contentType: req.file.mimetype,
+      contentType: req.file.mimetype || 'application/octet-stream',
       metadata: {
         originalName: req.file.originalname,
         user: req.user.id,
         subfolder: 'health',
       },
     });
+
+    let mimeType = req.file.mimetype;
+    if (!ALLOWED_MIMES.includes(mimeType)) {
+      if (ext === '.pdf') mimeType = 'application/pdf';
+      else if (ext === '.png') mimeType = 'image/png';
+      else if (ext === '.webp') mimeType = 'image/webp';
+      else mimeType = 'image/jpeg';
+    }
 
     const record = await HealthRecord.create({
       user: req.user.id,
@@ -297,11 +306,12 @@ router.post('/records/upload', protect, healthUpload.single('file'), validateUpl
       fileName: filename,
       originalName: req.file.originalname,
       fileSizeBytes: req.file.size,
-      mimeType: req.file.mimetype,
+      mimeType,
     });
     res.status(201).json(record);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('[HEALTH RECORD UPLOAD ERROR]', err);
+    res.status(500).json({ message: err.message || 'Failed to upload health record' });
   }
 });
 

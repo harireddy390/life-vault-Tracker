@@ -74,6 +74,41 @@ class StepSensorService {
 
     this.boundHandleMotion = this.handleDeviceMotion.bind(this);
     this.boundVisibilityChange = this.handleVisibilityChange.bind(this);
+    this.getSteps = this.getSteps.bind(this);
+    this.getTodaySteps = this.getTodaySteps.bind(this);
+    this.getSensorSteps = this.getSensorSteps.bind(this);
+    this.resetSteps = this.resetSteps.bind(this);
+    this.resetTodaySteps = this.resetTodaySteps.bind(this);
+    this.subscribe = this.subscribe.bind(this);
+  }
+
+  /**
+   * Returns current step count for today or requested date.
+   */
+  getSteps(date) {
+    this.checkDayRollover();
+    if (!date || date === this.today) {
+      return this.sensorSteps || 0;
+    }
+    try {
+      const key = getStepStorageKey(date);
+      const val = localStorage.getItem(key);
+      return val ? parseInt(val, 10) || 0 : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  getTodaySteps() {
+    return this.getSteps(this.today);
+  }
+
+  getSensorSteps() {
+    return this.sensorSteps || 0;
+  }
+
+  resetSteps() {
+    return this.resetTodaySteps();
   }
 
   /**
@@ -684,6 +719,7 @@ class StepSensorService {
     listener({
       status: this.status,
       sensorSteps: this.sensorSteps,
+      steps: this.sensorSteps,
       today: this.today,
       isNative: this.isNative,
       trackingType: this.isNative ? 'native_hardware' : 'browser_physics',
@@ -695,6 +731,7 @@ class StepSensorService {
     const state = {
       status: this.status,
       sensorSteps: this.sensorSteps,
+      steps: this.sensorSteps,
       today: this.today,
       isNative: this.isNative,
       trackingType: this.isNative ? 'native_hardware' : 'browser_physics',
@@ -710,4 +747,13 @@ class StepSensorService {
 }
 
 export const stepSensorService = new StepSensorService();
+
+// Standalone function exports for maximum interoperability
+export const getSteps = (date) => stepSensorService.getSteps(date);
+export const getTodaySteps = () => stepSensorService.getTodaySteps();
+export const getSensorSteps = () => stepSensorService.getSensorSteps();
+export const resetSteps = () => stepSensorService.resetSteps();
+export const resetTodaySteps = () => stepSensorService.resetTodaySteps();
+export const subscribe = (listener) => stepSensorService.subscribe(listener);
+
 export default stepSensorService;

@@ -127,3 +127,4 @@ healthMetricSchema.index({ user: 1, date: 1 }, { unique: true });
 healthMetricSchema.index({ user: 1, createdAt: -1 });
 
 module.exports = mongoose.model('HealthMetric', healthMetricSchema);
+

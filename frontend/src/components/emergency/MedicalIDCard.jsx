@@ -300,3 +300,4 @@ export default function MedicalIDCard({ profile = {}, onUpdateProfile }) {
     </div>
   );
 }
+

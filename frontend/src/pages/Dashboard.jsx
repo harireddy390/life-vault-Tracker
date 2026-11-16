@@ -97,13 +97,13 @@ export default function Dashboard() {
     try {
       const todayLocal = toLocalDateString();
       const [t, g, d, e, ts, hd, hs] = await Promise.all([
-        taskService.getTasks(),
-        goalService.getGoals(),
-        documentService.getDocuments(),
-        expenseService.getExpenses(),
-        timerSessionService.getSessions(),
-        progressService.getDateProgress(todayLocal),
-        progressService.getStats(todayLocal),
+        taskService.getTasks().catch(() => swrCache.get('dashboard:tasks') || []),
+        goalService.getGoals().catch(() => swrCache.get('dashboard:goals') || []),
+        documentService.getDocuments().catch(() => swrCache.get('dashboard:docs') || []),
+        expenseService.getExpenses().catch(() => swrCache.get('dashboard:expenses') || []),
+        timerSessionService.getSessions().catch(() => swrCache.get('dashboard:timerSessions') || []),
+        progressService.getDateProgress(todayLocal).catch(() => swrCache.get('dashboard:habitDay') || null),
+        progressService.getStats(todayLocal).catch(() => swrCache.get('dashboard:habitStats') || null),
       ]);
       setTasks(t); setGoals(g); setDocs(d); setExpenses(e); setTimerSessions(ts);
       setHabitDay(hd); setHabitStats(hs);

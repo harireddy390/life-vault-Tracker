@@ -152,6 +152,12 @@ export default function Health() {
     loadClinicalData();
   }, []);
 
+  useEffect(() => {
+    getRecords({ category: activeCategory, search: searchQuery })
+      .then((data) => setRecords(data || []))
+      .catch((err) => console.error('Failed to filter records:', err));
+  }, [activeCategory, searchQuery]);
+
   // ── Handlers for Daily Biometrics ──
   const handleSaveDailyMetric = async (updates) => {
     try {
@@ -442,6 +448,11 @@ export default function Health() {
         <UploadRecordModal
           isOpen={isUploadRecordOpen}
           onClose={() => setIsUploadRecordOpen(false)}
+          onRecordUploaded={async () => {
+            const data = await getRecords({ category: activeCategory, search: searchQuery });
+            setRecords(data || []);
+            showToast('Diagnostic document uploaded to encrypted storage');
+          }}
           onSuccess={async () => {
             const data = await getRecords({ category: activeCategory, search: searchQuery });
             setRecords(data || []);

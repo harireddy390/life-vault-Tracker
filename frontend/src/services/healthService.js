@@ -22,13 +22,17 @@ export const logVital = (data) => api.post(`${BASE}/vitals`, data).then((r) => r
 // ── Health Records ──
 export const getRecords = (params = {}) => api.get(`${BASE}/records`, { params }).then((r) => r.data);
 export const uploadRecord = (formData) =>
-  api
-    .post(`${BASE}/records/upload`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
-    .then((r) => r.data);
+  api.post(`${BASE}/records/upload`, formData).then((r) => r.data);
 export const deleteRecord = (id) => api.delete(`${BASE}/records/${id}`).then((r) => r.data);
-export const getRecordDownloadUrl = (id) => `/api/health/records/${id}/download`;
+export const getRecordDownloadUrl = (id) => {
+  try {
+    const raw = localStorage.getItem('lifevault_user');
+    const token = raw ? JSON.parse(raw).token : '';
+    return `/api/health/records/${id}/download${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+  } catch {
+    return `/api/health/records/${id}/download`;
+  }
+};
 
 // ── Comprehensive Daily Health Metrics (Vitals, Water, Sleep, Meds, Workout) ──
 export const getDailyHealthMetric = async (date, onRevalidate) => {

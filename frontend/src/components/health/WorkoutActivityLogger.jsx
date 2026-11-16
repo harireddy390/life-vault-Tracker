@@ -33,10 +33,10 @@ export default function WorkoutActivityLogger({
 
   useEffect(() => {
     // Initial fetch from stepSensorService
-    setLiveSteps(stepSensorService.getSteps());
+    setLiveSteps(typeof stepSensorService.getSteps === 'function' ? stepSensorService.getSteps() : 0);
 
     const unsubscribe = stepSensorService.subscribe((state) => {
-      setLiveSteps(state.steps);
+      setLiveSteps(state.steps ?? state.sensorSteps ?? 0);
     });
 
     return () => unsubscribe();
@@ -301,3 +301,4 @@ export default function WorkoutActivityLogger({
     </div>
   );
 }
+
