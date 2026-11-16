@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import AppLayout from './layouts/AppLayout';
 import PrivateRoute from './components/PrivateRoute';
 
@@ -26,42 +27,45 @@ const Settings = lazy(() => import('./pages/Settings'));
 
 function App() {
   return (
-    <Suspense fallback={null}>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password/:token" element={<ResetPassword />} />
+    <>
+      <Suspense fallback={null}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password/:token" element={<ResetPassword />} />
 
-        <Route
-          element={
-            <PrivateRoute>
-              <AppLayout />
-            </PrivateRoute>
-          }
-        >
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/command" element={<CommandCenter />} />
-          <Route path="/vault" element={<DocumentVault />} />
-          <Route path="/health" element={<Health />} />
-          <Route path="/goals" element={<Goals />} />
-          <Route path="/planner" element={<Planner />} />
-          <Route path="/progress" element={<Planner />} />
-          <Route path="/notes" element={<Notes />} />
-          <Route path="/learning" element={<Notes />} />
-          <Route path="/finance" element={<Finance />} />
-          <Route path="/family" element={<Family />} />
-          <Route path="/memories" element={<Memories />} />
-          <Route path="/life-ai" element={<LifeAI />} />
-          <Route path="/ai" element={<LifeAI />} />
-          <Route path="/emergency" element={<Emergency />} />
-          <Route path="/settings" element={<Settings />} />
-        </Route>
+          <Route
+            element={
+              <PrivateRoute>
+                <AppLayout />
+              </PrivateRoute>
+            }
+          >
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/command" element={<CommandCenter />} />
+            <Route path="/vault" element={<DocumentVault />} />
+            <Route path="/health" element={<Health />} />
+            <Route path="/goals" element={<Goals />} />
+            <Route path="/planner" element={<Planner />} />
+            <Route path="/progress" element={<Planner />} />
+            <Route path="/notes" element={<Notes />} />
+            <Route path="/learning" element={<Notes />} />
+            <Route path="/finance" element={<Finance />} />
+            <Route path="/family" element={<Family />} />
+            <Route path="/memories" element={<Memories />} />
+            <Route path="/life-ai" element={<LifeAI />} />
+            <Route path="/ai" element={<LifeAI />} />
+            <Route path="/emergency" element={<Emergency />} />
+            <Route path="/settings" element={<Settings />} />
+          </Route>
 
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
-    </Suspense>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </Suspense>
+      <Analytics />
+    </>
   );
 }
 
